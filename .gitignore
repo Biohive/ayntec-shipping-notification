@@ -1,4 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# ─── Project-specific ─────────────────────────────────────────────────────────
+# Environment and secrets
+.env
+
+# SQLite data directory
+data/
+
+# Static build artifacts (if any)
+static/dist/
 __pycache__/
 *.py[codz]
 *$py.class

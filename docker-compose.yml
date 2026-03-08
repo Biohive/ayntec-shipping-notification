@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data  # persist SQLite database
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:///./data/app.db
