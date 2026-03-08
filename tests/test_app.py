@@ -92,6 +92,12 @@ def test_add_order_redirects_unauthenticated(client):
     assert "/auth/login" in response.headers["location"]
 
 
+def test_edit_order_redirects_unauthenticated(client):
+    response = client.get("/orders/1/edit", follow_redirects=False)
+    assert response.status_code in (302, 307)
+    assert "/auth/login" in response.headers["location"]
+
+
 # ─── Auth routes ─────────────────────────────────────────────────────────────
 
 def test_login_redirects_or_shows_not_configured(client):
@@ -402,3 +408,112 @@ def test_email_test_button_clears_field_when_submitted_empty(auth_client):
     )
     assert response.status_code == 200
     assert f'value="{saved_email}"' not in response.text
+
+
+# ─── Edit order ───────────────────────────────────────────────────────────────
+
+@pytest.fixture()
+def auth_client_with_order(monkeypatch):
+    """TestClient with an authenticated session and a seeded order."""
+    from app.models import User, Order as OrderModel
+    from app.csrf import verify_csrf
+    import app.routers.pages as pages_module
+    import app.routers.orders as orders_module
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    db = next(override_get_db())
+    user_row = User(sub="order-sub", email="order@example.com", name="Order User")
+    db.add(user_row)
+    db.commit()
+    db.refresh(user_row)
+    user_id = user_row.id
+
+    order_row = OrderModel(user_id=user_id, order_number="11111", label="My Label")
+    db.add(order_row)
+    db.commit()
+    db.refresh(order_row)
+    order_id = order_row.id
+    db.close()
+
+    user_dict = {"db_id": user_id, "sub": "order-sub", "email": "order@example.com"}
+
+    monkeypatch.setattr(pages_module, "get_current_user", lambda request: user_dict)
+    monkeypatch.setattr(orders_module, "get_current_user", lambda request: user_dict)
+    app.dependency_overrides[verify_csrf] = lambda: None
+
+    with TestClient(app, raise_server_exceptions=False) as c:
+        c.order_id = order_id
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+def test_edit_order_form_shows_current_values(auth_client_with_order):
+    """GET /orders/{id}/edit should render a form pre-filled with current order values."""
+    order_id = auth_client_with_order.order_id
+    response = auth_client_with_order.get(f"/orders/{order_id}/edit")
+    assert response.status_code == 200
+    assert "11111" in response.text
+    assert "My Label" in response.text
+
+
+def test_edit_order_updates_label(auth_client_with_order):
+    """POST /orders/{id}/edit should update the label and redirect to dashboard."""
+    order_id = auth_client_with_order.order_id
+    response = auth_client_with_order.post(
+        f"/orders/{order_id}/edit",
+        data={"order_number": "11111", "label": "New Label", "csrf_token": "ignored"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "/dashboard" in response.headers["location"]
+
+
+def test_edit_order_updates_order_number(auth_client_with_order):
+    """POST /orders/{id}/edit with a new order number should update and reset tracking."""
+    order_id = auth_client_with_order.order_id
+    response = auth_client_with_order.post(
+        f"/orders/{order_id}/edit",
+        data={"order_number": "99999", "label": "My Label", "csrf_token": "ignored"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "/dashboard" in response.headers["location"]
+
+
+def test_edit_order_rejects_non_numeric_order_number(auth_client_with_order):
+    """POST /orders/{id}/edit with non-numeric order number should show an error."""
+    order_id = auth_client_with_order.order_id
+    response = auth_client_with_order.post(
+        f"/orders/{order_id}/edit",
+        data={"order_number": "ABC", "label": "", "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert "digits only" in response.text
+
+
+def test_edit_order_rejects_duplicate_order_number(auth_client_with_order):
+    """POST /orders/{id}/edit should reject an order number already tracked by the user."""
+    from app.models import Order as OrderModel
+
+    db = next(override_get_db())
+
+    # Seed a second order for the same user
+    existing = (
+        db.query(OrderModel)
+        .filter(OrderModel.id == auth_client_with_order.order_id)
+        .first()
+    )
+    second = OrderModel(user_id=existing.user_id, order_number="22222", label=None)
+    db.add(second)
+    db.commit()
+    db.close()
+
+    order_id = auth_client_with_order.order_id
+    response = auth_client_with_order.post(
+        f"/orders/{order_id}/edit",
+        data={"order_number": "22222", "label": "", "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert "already tracked" in response.text
