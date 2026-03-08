@@ -108,20 +108,38 @@ def test_logout_clears_session_and_redirects(client):
 
 # ─── Checker module ──────────────────────────────────────────────────────────
 
-def test_extract_status_finds_pattern():
-    from app.checker import _extract_status
+def test_parse_dashboard_extracts_ranges():
+    from app.checker import _parse_dashboard
 
-    html = "<p>Order Status: Shipped</p>"
-    result = _extract_status(html)
-    assert result is not None
-    assert "Shipped" in result
+    html = """
+    <div>
+    2026/3/4
+    AYN Thor Black Lite: 1500xx--1633xx
+    AYN Thor Black Max: 1464xx--1506xx
+    </div>
+    """
+    ranges = _parse_dashboard(html)
+    assert len(ranges) == 2
+    assert ranges[0].product == "AYN Thor Black Lite"
+    assert ranges[0].range_low == 150000
+    assert ranges[0].range_high == 163399
 
 
-def test_extract_status_returns_none_on_no_match():
-    from app.checker import _extract_status
+def test_check_order_shipped_finds_match():
+    from app.checker import check_order_shipped, ShippedRange
 
-    html = "<p>Nothing here</p>"
-    assert _extract_status(html) is None
+    ranges = [ShippedRange(date="2026/3/4", product="AYN Thor Black Lite", range_low=150000, range_high=163399)]
+    status, shipped = check_order_shipped("155000", ranges)
+    assert shipped is True
+    assert "Shipped" in status
+
+
+def test_check_order_shipped_no_match():
+    from app.checker import check_order_shipped, ShippedRange
+
+    ranges = [ShippedRange(date="2026/3/4", product="AYN Thor Black Lite", range_low=150000, range_high=163399)]
+    status, shipped = check_order_shipped("200000", ranges)
+    assert shipped is False
 
 
 # ─── Notifiers (unit, no network) ────────────────────────────────────────────
