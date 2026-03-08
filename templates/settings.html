@@ -111,6 +111,15 @@
         Save Settings
       </button>
     </form>
+
+    <!-- Test Notification -->
+    <form action="/settings/test" method="post" class="mt-4">
+      <button type="submit"
+              class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm border border-gray-300">
+        &#x1F514; Send Test Notification
+      </button>
+      <p class="text-xs text-gray-400 text-center mt-2">Sends a test to all enabled channels using your saved settings.</p>
+    </form>
   </div>
 </div>
 {% endblock %}

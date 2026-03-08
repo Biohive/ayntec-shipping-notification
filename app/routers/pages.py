@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import Order, NotificationSetting
+from app.notifiers import send_discord, send_ntfy, send_email
 from app.templates import templates
 
 logger = logging.getLogger(__name__)
@@ -112,4 +113,61 @@ async def save_settings(
             "notif": notif,
             "success": "Settings saved!",
         },
+    )
+
+
+@router.post("/settings/test")
+async def test_notifications(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/auth/login")
+
+    notif = (
+        db.query(NotificationSetting)
+        .filter(NotificationSetting.user_id == user["db_id"])
+        .first()
+    )
+    if not notif:
+        return templates.TemplateResponse(
+            request,
+            "settings.html",
+            {
+                "user": user,
+                "notif": NotificationSetting(user_id=user["db_id"]),
+                "error": "Save your settings first.",
+            },
+        )
+
+    results = []
+
+    if notif.discord_enabled and notif.discord_webhook_url:
+        try:
+            await send_discord(notif.discord_webhook_url, "TEST", "This is a test notification")
+            results.append("Discord \u2713")
+        except Exception:
+            results.append("Discord \u2717")
+
+    if notif.ntfy_enabled and notif.ntfy_url:
+        try:
+            await send_ntfy(notif.ntfy_url, "TEST", "This is a test notification")
+            results.append("NTFY \u2713")
+        except Exception:
+            results.append("NTFY \u2717")
+
+    if notif.email_enabled and notif.email_address:
+        try:
+            send_email(notif.email_address, "TEST", "This is a test notification")
+            results.append("Email \u2713")
+        except Exception:
+            results.append("Email \u2717")
+
+    if not results:
+        message = "No channels enabled. Enable at least one channel and save first."
+    else:
+        message = "Test sent: " + ", ".join(results)
+
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {"user": user, "notif": notif, "success": message},
     )
