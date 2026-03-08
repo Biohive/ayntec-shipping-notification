@@ -18,12 +18,9 @@ async def send_discord(webhook_url: str, order_number: str, status: str) -> None
     )
     payload = {"content": message}
     async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            resp = await client.post(webhook_url, json=payload)
-            resp.raise_for_status()
-            logger.info("Discord notification sent for order %s", order_number)
-        except Exception as exc:
-            logger.error("Discord notification failed: %s", exc)
+        resp = await client.post(webhook_url, json=payload)
+        resp.raise_for_status()
+        logger.info("Discord notification sent for order %s", order_number)
 
 
 async def send_ntfy(ntfy_url: str, order_number: str, status: str) -> None:
@@ -35,12 +32,9 @@ async def send_ntfy(ntfy_url: str, order_number: str, status: str) -> None:
         "Tags": "package,shipping",
     }
     async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            resp = await client.post(ntfy_url, data=body.encode(), headers=headers)
-            resp.raise_for_status()
-            logger.info("NTFY notification sent for order %s", order_number)
-        except Exception as exc:
-            logger.error("NTFY notification failed: %s", exc)
+        resp = await client.post(ntfy_url, data=body.encode(), headers=headers)
+        resp.raise_for_status()
+        logger.info("NTFY notification sent for order %s", order_number)
 
 
 def send_email(to_address: str, order_number: str, status: str) -> None:
@@ -66,12 +60,9 @@ def send_email(to_address: str, order_number: str, status: str) -> None:
     msg["From"] = from_address
     msg["To"] = to_address
 
-    try:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            if smtp_user and smtp_pass:
-                server.login(smtp_user, smtp_pass)
-            server.sendmail(from_address, [to_address], msg.as_string())
-        logger.info("Email notification sent for order %s to %s", order_number, to_address)
-    except Exception as exc:
-        logger.error("Email notification failed: %s", exc)
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        if smtp_user and smtp_pass:
+            server.login(smtp_user, smtp_pass)
+        server.sendmail(from_address, [to_address], msg.as_string())
+    logger.info("Email notification sent for order %s to %s", order_number, to_address)

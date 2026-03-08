@@ -103,7 +103,9 @@ def test_not_configured_page(client):
 def test_logout_clears_session_and_redirects(client):
     response = client.get("/auth/logout", follow_redirects=False)
     assert response.status_code in (302, 307)
-    assert response.headers["location"] == "/"
+    # When OIDC is not configured, falls back to redirecting to /
+    location = response.headers["location"]
+    assert location == "/" or "end-session" in location or "end_session" in location
 
 
 # ─── Checker module ──────────────────────────────────────────────────────────

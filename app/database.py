@@ -33,6 +33,9 @@ def get_db():
 
 
 def init_db() -> None:
-    """Create all tables."""
+    """Create all tables and apply versioned migrations."""
     from app import models  # noqa: F401 – ensure models are imported before create_all
     Base.metadata.create_all(bind=engine)
+
+    from app.migrations import run_migrations
+    run_migrations(engine)

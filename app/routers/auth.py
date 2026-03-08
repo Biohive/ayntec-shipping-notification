@@ -65,6 +65,9 @@ async def callback(request: Request):
             "name": db_user.name,
             "db_id": db_user.id,
         }
+        # Store id_token for RP-Initiated Logout
+        if token.get("id_token"):
+            request.session["id_token"] = token["id_token"]
     finally:
         db.close()
 
@@ -73,7 +76,26 @@ async def callback(request: Request):
 
 @router.get("/logout")
 async def logout(request: Request):
+    id_token = request.session.get("id_token")
     request.session.clear()
+
+    # Redirect to OIDC provider's end_session_endpoint to fully log out
+    if settings.oidc_client_id:
+        try:
+            metadata = await oauth.authentik.load_server_metadata()
+            end_session_endpoint = metadata.get("end_session_endpoint")
+            if end_session_endpoint:
+                from urllib.parse import urlencode
+                params = {
+                    "post_logout_redirect_uri": settings.app_url,
+                    "client_id": settings.oidc_client_id,
+                }
+                if id_token:
+                    params["id_token_hint"] = id_token
+                return RedirectResponse(url=f"{end_session_endpoint}?{urlencode(params)}")
+        except Exception as exc:
+            logger.warning("Could not perform OIDC logout: %s", exc)
+
     return RedirectResponse(url="/")
 
 

@@ -58,4 +58,9 @@ class NotificationSetting(Base):
     ntfy_url = Column(String, nullable=True)  # e.g. https://ntfy.sh/my-topic
     ntfy_enabled = Column(Boolean, default=False)
 
+    # Track whether each channel has been successfully tested
+    discord_tested = Column(Boolean, default=False)
+    email_tested = Column(Boolean, default=False)
+    ntfy_tested = Column(Boolean, default=False)
+
     user = relationship("User", back_populates="notification_settings")

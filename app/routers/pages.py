@@ -98,12 +98,24 @@ async def save_settings(
         notif = NotificationSetting(user_id=user["db_id"])
         db.add(notif)
 
-    notif.discord_webhook_url = discord_webhook_url.strip() or None
-    notif.discord_enabled = discord_enabled and bool(discord_webhook_url.strip())
-    notif.email_address = email_address.strip() or None
-    notif.email_enabled = email_enabled and bool(email_address.strip())
-    notif.ntfy_url = ntfy_url.strip() or None
-    notif.ntfy_enabled = ntfy_enabled and bool(ntfy_url.strip())
+    # Reset tested flags when URLs/addresses change
+    new_discord_url = discord_webhook_url.strip() or None
+    if new_discord_url != notif.discord_webhook_url:
+        notif.discord_tested = False
+    notif.discord_webhook_url = new_discord_url
+    notif.discord_enabled = discord_enabled and bool(new_discord_url)
+
+    new_email = email_address.strip() or None
+    if new_email != notif.email_address:
+        notif.email_tested = False
+    notif.email_address = new_email
+    notif.email_enabled = email_enabled and bool(new_email)
+
+    new_ntfy_url = ntfy_url.strip() or None
+    if new_ntfy_url != notif.ntfy_url:
+        notif.ntfy_tested = False
+    notif.ntfy_url = new_ntfy_url
+    notif.ntfy_enabled = ntfy_enabled and bool(new_ntfy_url)
 
     db.commit()
     return templates.TemplateResponse(
@@ -139,45 +151,72 @@ def _test_response(request, user, notif, message, success=True):
 
 
 @router.post("/settings/test/discord")
-async def test_discord(request: Request, db: Session = Depends(get_db)):
+async def test_discord(request: Request, db: Session = Depends(get_db), discord_webhook_url: str = Form("")):
     user, notif, redirect = await _get_notif_or_redirect(request, db)
     if redirect:
         return redirect
-    if not notif or not notif.discord_webhook_url:
+    url = discord_webhook_url.strip()
+    if not url:
         return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
-                              "Save a Discord webhook URL first.", success=False)
+                              "Enter a Discord webhook URL first.", success=False)
     try:
-        await send_discord(notif.discord_webhook_url, "TEST", "This is a test notification")
-        return _test_response(request, user, notif, "Discord test sent \u2713")
+        await send_discord(url, "TEST", "This is a test notification")
+        if notif:
+            notif.discord_tested = True
+            db.commit()
+            db.refresh(notif)
+        return _test_response(request, user, notif, "Discord test sent")
     except Exception as exc:
+        if notif:
+            notif.discord_tested = False
+            db.commit()
+            db.refresh(notif)
         return _test_response(request, user, notif, f"Discord test failed: {exc}", success=False)
 
 
 @router.post("/settings/test/email")
-async def test_email(request: Request, db: Session = Depends(get_db)):
+async def test_email(request: Request, db: Session = Depends(get_db), email_address: str = Form("")):
     user, notif, redirect = await _get_notif_or_redirect(request, db)
     if redirect:
         return redirect
-    if not notif or not notif.email_address:
+    addr = email_address.strip()
+    if not addr:
         return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
-                              "Save an email address first.", success=False)
+                              "Enter an email address first.", success=False)
     try:
-        send_email(notif.email_address, "TEST", "This is a test notification")
-        return _test_response(request, user, notif, "Email test sent \u2713")
+        send_email(addr, "TEST", "This is a test notification")
+        if notif:
+            notif.email_tested = True
+            db.commit()
+            db.refresh(notif)
+        return _test_response(request, user, notif, "Email test sent")
     except Exception as exc:
+        if notif:
+            notif.email_tested = False
+            db.commit()
+            db.refresh(notif)
         return _test_response(request, user, notif, f"Email test failed: {exc}", success=False)
 
 
 @router.post("/settings/test/ntfy")
-async def test_ntfy(request: Request, db: Session = Depends(get_db)):
+async def test_ntfy(request: Request, db: Session = Depends(get_db), ntfy_url: str = Form("")):
     user, notif, redirect = await _get_notif_or_redirect(request, db)
     if redirect:
         return redirect
-    if not notif or not notif.ntfy_url:
+    url = ntfy_url.strip()
+    if not url:
         return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
-                              "Save an NTFY URL first.", success=False)
+                              "Enter an NTFY URL first.", success=False)
     try:
-        await send_ntfy(notif.ntfy_url, "TEST", "This is a test notification")
-        return _test_response(request, user, notif, "NTFY test sent \u2713")
+        await send_ntfy(url, "TEST", "This is a test notification")
+        if notif:
+            notif.ntfy_tested = True
+            db.commit()
+            db.refresh(notif)
+        return _test_response(request, user, notif, "NTFY test sent")
     except Exception as exc:
+        if notif:
+            notif.ntfy_tested = False
+            db.commit()
+            db.refresh(notif)
         return _test_response(request, user, notif, f"NTFY test failed: {exc}", success=False)

@@ -83,7 +83,10 @@ async def _dispatch_notifications(db: Session, order: Order, status_text: str) -
 
     # Email is synchronous
     if settings_row.email_enabled and settings_row.email_address:
-        send_email(settings_row.email_address, order.order_number, status_text)
+        try:
+            send_email(settings_row.email_address, order.order_number, status_text)
+        except Exception as exc:
+            logger.error("Email notification failed for order %s: %s", order.order_number, exc)
 
 
 def start_scheduler() -> None:
