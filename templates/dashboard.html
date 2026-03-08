@@ -101,6 +101,10 @@
             </button>
           </form>
         {% endif %}
+        <a href="/orders/{{ order.id }}/edit"
+           class="text-xs text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg">
+          Edit
+        </a>
         <form action="/orders/{{ order.id }}/delete" method="post"
               onsubmit="return confirm('Remove order #{{ order.order_number }}?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">

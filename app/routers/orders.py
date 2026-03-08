@@ -105,6 +105,102 @@ async def add_order(
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
+@router.get("/{order_id}/edit")
+async def edit_order_form(
+    order_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_login(request)
+    if not user:
+        return RedirectResponse(url="/auth/login")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.user_id == user["db_id"]).first()
+    if not order:
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    return templates.TemplateResponse(request, "edit_order.html", {"user": user, "order": order})
+
+
+@router.post("/{order_id}/edit")
+async def edit_order(
+    order_id: int,
+    request: Request,
+    _csrf: None = Depends(verify_csrf),
+    order_number: str = Form(...),
+    label: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _require_login(request)
+    if not user:
+        return RedirectResponse(url="/auth/login")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.user_id == user["db_id"]).first()
+    if not order:
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    order_number = order_number.strip()
+    label = label.strip()
+
+    if not order_number:
+        return templates.TemplateResponse(
+            request,
+            "edit_order.html",
+            {"user": user, "order": order, "error": "Order number is required."},
+        )
+
+    if not _ORDER_NUMBER_RE.match(order_number):
+        return templates.TemplateResponse(
+            request,
+            "edit_order.html",
+            {"user": user, "order": order, "error": "Order number must contain digits only."},
+        )
+
+    if len(order_number) > _MAX_ORDER_NUMBER_LEN:
+        return templates.TemplateResponse(
+            request,
+            "edit_order.html",
+            {"user": user, "order": order, "error": f"Order number must be at most {_MAX_ORDER_NUMBER_LEN} digits."},
+        )
+
+    if len(label) > _MAX_LABEL_LEN:
+        return templates.TemplateResponse(
+            request,
+            "edit_order.html",
+            {"user": user, "order": order, "error": f"Label must be at most {_MAX_LABEL_LEN} characters."},
+        )
+
+    # If the order number changed, check it isn't already tracked by this user
+    if order_number != order.order_number:
+        duplicate = (
+            db.query(Order)
+            .filter(
+                Order.user_id == user["db_id"],
+                Order.order_number == order_number,
+                Order.id != order_id,
+                Order.active == True,  # noqa: E712
+            )
+            .first()
+        )
+        if duplicate:
+            return templates.TemplateResponse(
+                request,
+                "edit_order.html",
+                {"user": user, "order": order, "error": "Order already tracked."},
+            )
+
+        # Reset tracking state since we're now monitoring a different order number
+        order.order_number = order_number
+        order.last_status = None
+        order.shipped = False
+        order.notified = False
+        order.active = True
+
+    order.label = label or None
+    db.commit()
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
 @router.post("/{order_id}/delete")
 async def delete_order(
     order_id: int,
