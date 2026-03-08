@@ -2,28 +2,36 @@
 
 import logging
 import smtplib
-import os
 from email.mime.text import MIMEText
 
 import httpx
+
+from app.config import settings
+from app.security import validate_webhook_url
 
 logger = logging.getLogger(__name__)
 
 
 async def send_discord(webhook_url: str, order_number: str, status: str) -> None:
+    validate_webhook_url(webhook_url, label="Discord webhook URL")
     message = (
         f"📦 **Ayntec Order Update**\n"
         f"Order **#{order_number}** has shipped!\n"
         f"Status: `{status}`"
     )
     payload = {"content": message}
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(webhook_url, json=payload)
-        resp.raise_for_status()
-        logger.info("Discord notification sent for order %s", order_number)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(webhook_url, json=payload)
+            resp.raise_for_status()
+            logger.info("Discord notification sent for order %s", order_number)
+    except httpx.RequestError as exc:
+        logger.error("Discord notification failed for order %s: %s", order_number, exc)
+        raise
 
 
 async def send_ntfy(ntfy_url: str, order_number: str, status: str) -> None:
+    validate_webhook_url(ntfy_url, label="NTFY URL")
     title = f"Ayntec Order #{order_number} Shipped!"
     body = f"Your order has shipped. Status: {status}"
     headers = {
@@ -31,18 +39,22 @@ async def send_ntfy(ntfy_url: str, order_number: str, status: str) -> None:
         "Priority": "high",
         "Tags": "package,shipping",
     }
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(ntfy_url, data=body.encode(), headers=headers)
-        resp.raise_for_status()
-        logger.info("NTFY notification sent for order %s", order_number)
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(ntfy_url, data=body.encode(), headers=headers)
+            resp.raise_for_status()
+            logger.info("NTFY notification sent for order %s", order_number)
+    except httpx.RequestError as exc:
+        logger.error("NTFY notification failed for order %s: %s", order_number, exc)
+        raise
 
 
 def send_email(to_address: str, order_number: str, status: str) -> None:
-    smtp_host = os.getenv("SMTP_HOST", "")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
-    from_address = os.getenv("SMTP_FROM", smtp_user)
+    smtp_host = settings.smtp_host
+    smtp_port = settings.smtp_port
+    smtp_user = settings.smtp_user
+    smtp_pass = settings.smtp_pass
+    from_address = settings.smtp_from or smtp_user
 
     if not smtp_host:
         logger.warning("SMTP not configured – skipping email notification")

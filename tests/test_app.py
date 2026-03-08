@@ -147,8 +147,8 @@ def test_check_order_shipped_no_match():
 # ─── Notifiers (unit, no network) ────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_send_discord_handles_request_error(monkeypatch):
-    """send_discord should log and not raise even when the request fails."""
+async def test_send_discord_raises_on_request_error(monkeypatch):
+    """send_discord should re-raise httpx.RequestError so callers can handle it."""
     import httpx
     from app import notifiers
 
@@ -156,12 +156,13 @@ async def test_send_discord_handles_request_error(monkeypatch):
         raise httpx.RequestError("network error")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
-    # Should not raise
-    await notifiers.send_discord("https://discord.com/api/webhooks/fake", "1234", "shipped")
+    with pytest.raises(httpx.RequestError):
+        await notifiers.send_discord("https://discord.com/api/webhooks/fake", "1234", "shipped")
 
 
 @pytest.mark.asyncio
-async def test_send_ntfy_handles_request_error(monkeypatch):
+async def test_send_ntfy_raises_on_request_error(monkeypatch):
+    """send_ntfy should re-raise httpx.RequestError so callers can handle it."""
     import httpx
     from app import notifiers
 
@@ -169,7 +170,8 @@ async def test_send_ntfy_handles_request_error(monkeypatch):
         raise httpx.RequestError("network error")
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
-    await notifiers.send_ntfy("https://ntfy.sh/fake-topic", "1234", "shipped")
+    with pytest.raises(httpx.RequestError):
+        await notifiers.send_ntfy("https://ntfy.sh/fake-topic", "1234", "shipped")
 
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -180,3 +182,106 @@ def test_default_poll_interval():
 
 def test_secret_key_is_set():
     assert len(settings.secret_key) > 0
+
+
+# ─── SSRF protection (security.validate_webhook_url) ─────────────────────────
+
+def test_validate_webhook_url_allows_valid_https():
+    from app.security import validate_webhook_url
+    url = validate_webhook_url("https://discord.com/api/webhooks/123/abc")
+    assert url == "https://discord.com/api/webhooks/123/abc"
+
+
+def test_validate_webhook_url_rejects_http():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="HTTPS"):
+        validate_webhook_url("http://discord.com/api/webhooks/123/abc")
+
+
+def test_validate_webhook_url_rejects_localhost_name():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://localhost/evil")
+
+
+def test_validate_webhook_url_rejects_loopback_ip():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://127.0.0.1/secret")
+
+
+def test_validate_webhook_url_rejects_private_ip_10():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://10.0.0.1/internal")
+
+
+def test_validate_webhook_url_rejects_private_ip_172():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://172.16.0.1/internal")
+
+
+def test_validate_webhook_url_rejects_private_ip_192_168():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://192.168.1.1/router")
+
+
+def test_validate_webhook_url_rejects_link_local_aws_imds():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://169.254.169.254/latest/meta-data/")
+
+
+def test_validate_webhook_url_rejects_ipv6_loopback():
+    from app.security import validate_webhook_url
+    with pytest.raises(ValueError, match="private or loopback"):
+        validate_webhook_url("https://[::1]/secret")
+
+
+@pytest.mark.asyncio
+async def test_send_discord_rejects_ssrf_url():
+    """send_discord must reject private-IP URLs before making any HTTP request."""
+    from app import notifiers
+    with pytest.raises(ValueError, match="private or loopback"):
+        await notifiers.send_discord("https://127.0.0.1/hook", "1234", "shipped")
+
+
+@pytest.mark.asyncio
+async def test_send_ntfy_rejects_ssrf_url():
+    """send_ntfy must reject private-IP URLs before making any HTTP request."""
+    from app import notifiers
+    with pytest.raises(ValueError, match="private or loopback"):
+        await notifiers.send_ntfy("https://192.168.1.1/ntfy", "1234", "shipped")
+
+
+# ─── CSRF protection ─────────────────────────────────────────────────────────
+
+def test_post_without_csrf_token_returns_403(client):
+    """POST requests without a CSRF token must be rejected with 403."""
+    response = client.post("/orders/add", data={"order_number": "12345", "label": ""})
+    assert response.status_code == 403
+
+
+def test_settings_post_without_csrf_token_returns_403(client):
+    response = client.post("/settings", data={"discord_webhook_url": ""})
+    assert response.status_code == 403
+
+
+# ─── Input validation ────────────────────────────────────────────────────────
+
+def test_order_number_must_be_numeric():
+    """Non-numeric order numbers are rejected by the validation regex."""
+    from app.routers.orders import _ORDER_NUMBER_RE
+    assert not _ORDER_NUMBER_RE.match("ABC-123")
+    assert not _ORDER_NUMBER_RE.match("1234 5")
+    assert _ORDER_NUMBER_RE.match("12345")
+    assert _ORDER_NUMBER_RE.match("0")
+
+
+def test_order_number_max_length_enforced():
+    """Constant guards the configured maximum order-number length."""
+    from app.routers.orders import _MAX_ORDER_NUMBER_LEN
+    assert _MAX_ORDER_NUMBER_LEN == 20
+    assert len("1" * 21) > _MAX_ORDER_NUMBER_LEN

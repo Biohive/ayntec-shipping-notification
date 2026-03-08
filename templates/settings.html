@@ -36,6 +36,7 @@
     {% endif %}
 
     <form action="/settings" method="post" class="space-y-8">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
 
       <!-- Discord -->
       <div class="border border-gray-200 rounded-xl p-5">

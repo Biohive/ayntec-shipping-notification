@@ -1,11 +1,13 @@
 """Order management routes."""
 
 import logging
-from fastapi import APIRouter, Request, Form, Depends
+import re
+from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
+from app.csrf import verify_csrf
 from app.database import get_db
 from app.models import Order
 from app.templates import templates
@@ -13,6 +15,13 @@ from app.templates import templates
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+# Maximum lengths for user-supplied order fields
+_MAX_ORDER_NUMBER_LEN = 20
+_MAX_LABEL_LEN = 100
+
+# Order numbers are numeric only
+_ORDER_NUMBER_RE = re.compile(r"^\d+$")
 
 
 def _require_login(request: Request):
@@ -33,6 +42,7 @@ async def add_order_form(request: Request):
 @router.post("/add")
 async def add_order(
     request: Request,
+    _csrf: None = Depends(verify_csrf),
     order_number: str = Form(...),
     label: str = Form(""),
     db: Session = Depends(get_db),
@@ -42,11 +52,34 @@ async def add_order(
         return RedirectResponse(url="/auth/login")
 
     order_number = order_number.strip()
+    label = label.strip()
+
     if not order_number:
         return templates.TemplateResponse(
             request,
             "add_order.html",
             {"user": user, "error": "Order number is required."},
+        )
+
+    if not _ORDER_NUMBER_RE.match(order_number):
+        return templates.TemplateResponse(
+            request,
+            "add_order.html",
+            {"user": user, "error": "Order number must contain digits only."},
+        )
+
+    if len(order_number) > _MAX_ORDER_NUMBER_LEN:
+        return templates.TemplateResponse(
+            request,
+            "add_order.html",
+            {"user": user, "error": f"Order number must be at most {_MAX_ORDER_NUMBER_LEN} digits."},
+        )
+
+    if len(label) > _MAX_LABEL_LEN:
+        return templates.TemplateResponse(
+            request,
+            "add_order.html",
+            {"user": user, "error": f"Label must be at most {_MAX_LABEL_LEN} characters."},
         )
 
     # Check for duplicate
@@ -65,7 +98,7 @@ async def add_order(
     new_order = Order(
         user_id=user["db_id"],
         order_number=order_number,
-        label=label.strip() or None,
+        label=label or None,
     )
     db.add(new_order)
     db.commit()
@@ -73,7 +106,12 @@ async def add_order(
 
 
 @router.post("/{order_id}/delete")
-async def delete_order(order_id: int, request: Request, db: Session = Depends(get_db)):
+async def delete_order(
+    order_id: int,
+    request: Request,
+    _csrf: None = Depends(verify_csrf),
+    db: Session = Depends(get_db),
+):
     user = _require_login(request)
     if not user:
         return RedirectResponse(url="/auth/login")
@@ -86,7 +124,12 @@ async def delete_order(order_id: int, request: Request, db: Session = Depends(ge
 
 
 @router.post("/{order_id}/reactivate")
-async def reactivate_order(order_id: int, request: Request, db: Session = Depends(get_db)):
+async def reactivate_order(
+    order_id: int,
+    request: Request,
+    _csrf: None = Depends(verify_csrf),
+    db: Session = Depends(get_db),
+):
     """Re-enable notifications for an order that already shipped."""
     user = _require_login(request)
     if not user:
