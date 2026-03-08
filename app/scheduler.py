@@ -224,7 +224,7 @@ def start_scheduler() -> None:
     )
     scheduler.add_job(
         send_daily_summaries,
-        trigger=IntervalTrigger(seconds=60),
+        trigger=IntervalTrigger(minutes=15),
         id="daily_summaries",
         replace_existing=True,
         misfire_grace_time=30,

@@ -73,12 +73,12 @@
             </select>
           </div>
           <span class="text-gray-400 mb-2 text-lg leading-none">:</span>
-          <!-- Minute (5-minute intervals) -->
+          <!-- Minute (15-minute intervals) -->
           <div class="flex flex-col gap-1">
             <label class="text-xs text-gray-500" for="delivery_minute">Minute</label>
             <select id="delivery_minute" name="delivery_minute"
                     class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
-              {% for m in range(0, 60, 5) %}
+              {% for m in range(0, 60, 15) %}
               <option value="{{ m }}" {% if m == summary.delivery_minute %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
               {% endfor %}
             </select>

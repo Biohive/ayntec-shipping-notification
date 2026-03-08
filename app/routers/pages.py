@@ -394,7 +394,7 @@ async def save_summary_settings(
 
     # Convert 12h → 24h local time
     delivery_hour_24 = _to_24h(delivery_hour_12, delivery_ampm)
-    delivery_minute = max(0, min(59, delivery_minute))
+    delivery_minute = (max(0, min(59, delivery_minute)) // 15) * 15
 
     # Validate timezone (fall back to UTC on unrecognised value)
     try:
