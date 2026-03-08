@@ -4,15 +4,22 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
 from app.config import settings
 
-# Use an in-memory SQLite database for tests
+# Use an in-memory SQLite database for tests.
+# StaticPool ensures all sessions reuse the same single connection so that the
+# tables created by setup_database() are visible to every request handler.
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
-engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -285,3 +292,113 @@ def test_order_number_max_length_enforced():
     from app.routers.orders import _MAX_ORDER_NUMBER_LEN
     assert _MAX_ORDER_NUMBER_LEN == 20
     assert len("1" * 21) > _MAX_ORDER_NUMBER_LEN
+
+
+# ─── Test button URL preservation ────────────────────────────────────────────
+#
+# When a user clicks "Test" with a URL that differs from the saved DB value,
+# the re-rendered settings form must show the *submitted* value so the user
+# doesn't have to retype it before saving.
+
+@pytest.fixture()
+def auth_client(monkeypatch):
+    """TestClient with an authenticated session and pre-populated notification settings."""
+    from app.models import User, NotificationSetting
+    from app.csrf import verify_csrf
+    import app.routers.pages as pages_module
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Seed the DB: create a user and a saved notification setting.
+    db = next(override_get_db())
+    user_row = User(sub="test-sub", email="test@example.com", name="Test User")
+    db.add(user_row)
+    db.commit()
+    db.refresh(user_row)
+    user_id = user_row.id  # read before session closes
+
+    notif_row = NotificationSetting(
+        user_id=user_id,
+        discord_webhook_url="https://discord.com/api/webhooks/saved/saved",
+        email_address="saved@example.com",
+        ntfy_url="https://ntfy.sh/saved-topic",
+    )
+    db.add(notif_row)
+    db.commit()
+    db.close()
+
+    user_dict = {"db_id": user_id, "sub": "test-sub", "email": "test@example.com"}
+
+    # Patch get_current_user (called directly, not via Depends) and bypass CSRF.
+    monkeypatch.setattr(pages_module, "get_current_user", lambda request: user_dict)
+    app.dependency_overrides[verify_csrf] = lambda: None
+
+    with TestClient(app, raise_server_exceptions=False) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+def test_ntfy_test_button_preserves_submitted_url(auth_client):
+    """Submitted NTFY URL must appear in the form after pressing Test (even on validation error)."""
+    # Use an HTTP URL so validate_webhook_url raises ValueError (HTTPS required).
+    submitted_url = "http://ntfy.sh/my-new-topic"
+    saved_url = "https://ntfy.sh/saved-topic"
+
+    response = auth_client.post(
+        "/settings/test/ntfy",
+        data={"ntfy_url": submitted_url, "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert submitted_url in response.text, "Submitted URL must be shown in the form"
+    assert f'value="{saved_url}"' not in response.text, "Saved DB URL must not replace the submitted value"
+
+
+def test_discord_test_button_preserves_submitted_url(auth_client):
+    """Submitted Discord webhook URL must appear in the form after pressing Test."""
+    submitted_url = "http://discord.com/api/webhooks/bad"
+    saved_url = "https://discord.com/api/webhooks/saved/saved"
+
+    response = auth_client.post(
+        "/settings/test/discord",
+        data={"discord_webhook_url": submitted_url, "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert submitted_url in response.text
+    assert f'value="{saved_url}"' not in response.text
+
+
+def test_ntfy_test_button_clears_field_when_submitted_empty(auth_client):
+    """When user submits an empty NTFY URL and clicks Test, the field must appear empty."""
+    saved_url = "https://ntfy.sh/saved-topic"
+
+    response = auth_client.post(
+        "/settings/test/ntfy",
+        data={"ntfy_url": "", "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert f'value="{saved_url}"' not in response.text
+
+
+def test_discord_test_button_clears_field_when_submitted_empty(auth_client):
+    """When user submits an empty Discord URL and clicks Test, the field must appear empty."""
+    saved_url = "https://discord.com/api/webhooks/saved/saved"
+
+    response = auth_client.post(
+        "/settings/test/discord",
+        data={"discord_webhook_url": "", "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert f'value="{saved_url}"' not in response.text
+
+
+def test_email_test_button_clears_field_when_submitted_empty(auth_client):
+    """When user submits an empty email address and clicks Test, the field must appear empty."""
+    saved_email = "saved@example.com"
+
+    response = auth_client.post(
+        "/settings/test/email",
+        data={"email_address": "", "csrf_token": "ignored"},
+    )
+    assert response.status_code == 200
+    assert f'value="{saved_email}"' not in response.text
