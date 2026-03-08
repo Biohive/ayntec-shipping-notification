@@ -20,7 +20,7 @@ async def login(request: Request):
     if not settings.oidc_client_id:
         return RedirectResponse(url="/auth/not-configured")
 
-    redirect_uri = str(request.url_for("auth_callback"))
+    redirect_uri = settings.app_url.rstrip("/") + "/auth/callback"
     return await oauth.authentik.authorize_redirect(request, redirect_uri)
 
 
