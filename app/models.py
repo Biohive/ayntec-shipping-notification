@@ -21,6 +21,10 @@ class User(Base):
     notification_settings = relationship(
         "NotificationSetting", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    check_logs = relationship("CheckLog", back_populates="user", cascade="all, delete-orphan")
+    summary_config = relationship(
+        "SummaryConfig", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class Order(Base):
@@ -64,3 +68,41 @@ class NotificationSetting(Base):
     ntfy_tested = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="notification_settings")
+
+
+class CheckLog(Base):
+    """Records each time the scheduler checks a specific user's orders."""
+
+    __tablename__ = "check_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    checked_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="check_logs")
+
+
+class SummaryConfig(Base):
+    """Per-user configuration for the end-of-day summary notification."""
+
+    __tablename__ = "summary_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+
+    enabled = Column(Boolean, default=False)
+
+    # Delivery time stored in the user's local timezone (hour 0-23, minute 0-59)
+    delivery_hour = Column(Integer, default=20)
+    delivery_minute = Column(Integer, default=0)
+    timezone = Column(String, default="America/New_York")
+
+    # Which enabled notification channels to use for the summary (default off)
+    use_discord = Column(Boolean, default=False)
+    use_email = Column(Boolean, default=False)
+    use_ntfy = Column(Boolean, default=False)
+
+    # Prevents sending the summary more than once per day
+    last_sent_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="summary_config")

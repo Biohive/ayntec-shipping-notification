@@ -517,3 +517,281 @@ def test_edit_order_rejects_duplicate_order_number(auth_client_with_order):
     )
     assert response.status_code == 200
     assert "already tracked" in response.text
+
+
+# ─── Daily Summary ────────────────────────────────────────────────────────────
+
+def test_summary_settings_redirects_unauthenticated(client):
+    response = client.get("/settings/summary", follow_redirects=False)
+    assert response.status_code in (302, 307)
+    assert "/auth/login" in response.headers["location"]
+
+
+def test_summary_settings_post_without_csrf_returns_403(client):
+    response = client.post("/settings/summary", data={"enabled": "true"})
+    assert response.status_code == 403
+
+
+@pytest.fixture()
+def auth_client_summary(monkeypatch):
+    """TestClient with an authenticated session for summary settings tests."""
+    from app.models import User, NotificationSetting
+    from app.csrf import verify_csrf
+    import app.routers.pages as pages_module
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    db = next(override_get_db())
+    user_row = User(sub="summary-sub", email="summary@example.com", name="Summary User")
+    db.add(user_row)
+    db.commit()
+    db.refresh(user_row)
+    user_id = user_row.id
+
+    notif_row = NotificationSetting(
+        user_id=user_id,
+        discord_enabled=True,
+        discord_webhook_url="https://discord.com/api/webhooks/test/test",
+        ntfy_enabled=True,
+        ntfy_url="https://ntfy.sh/test-topic",
+    )
+    db.add(notif_row)
+    db.commit()
+    db.close()
+
+    user_dict = {"db_id": user_id, "sub": "summary-sub", "email": "summary@example.com"}
+
+    monkeypatch.setattr(pages_module, "get_current_user", lambda request: user_dict)
+    app.dependency_overrides[verify_csrf] = lambda: None
+
+    with TestClient(app, raise_server_exceptions=False) as c:
+        c.user_id = user_id
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+def test_summary_settings_page_renders(auth_client_summary):
+    response = auth_client_summary.get("/settings/summary")
+    assert response.status_code == 200
+    assert "Daily Summary" in response.text
+
+
+def test_summary_settings_page_shows_delivery_time_inputs(auth_client_summary):
+    response = auth_client_summary.get("/settings/summary")
+    assert response.status_code == 200
+    assert "delivery_hour_12" in response.text
+    assert "delivery_minute" in response.text
+    assert "delivery_ampm" in response.text
+    assert "delivery_timezone" in response.text
+
+
+def test_summary_settings_page_shows_channel_options(auth_client_summary):
+    response = auth_client_summary.get("/settings/summary")
+    assert response.status_code == 200
+    assert "Discord" in response.text
+    assert "Email" in response.text
+    assert "NTFY" in response.text
+
+
+def test_summary_settings_save_and_reload(auth_client_summary):
+    response = auth_client_summary.post(
+        "/settings/summary",
+        data={
+            "enabled": "true",
+            "delivery_hour_12": "6",
+            "delivery_minute": "30",
+            "delivery_ampm": "PM",
+            "delivery_timezone": "America/New_York",
+            "use_discord": "true",
+            "csrf_token": "ignored",
+        },
+    )
+    assert response.status_code == 200
+    assert "Summary settings saved" in response.text
+
+    # Reload the page — saved values must be reflected
+    response = auth_client_summary.get("/settings/summary")
+    assert response.status_code == 200
+    # 6 PM ET → stored as 18:30 → displayed back as 06 PM
+    assert 'value="6"' in response.text or '>06<' in response.text or 'selected>06<' in response.text
+    assert "PM" in response.text
+    assert "America/New_York" in response.text
+
+
+def test_summary_settings_disabled_by_default(auth_client_summary):
+    """A freshly-created SummaryConfig has enabled=False."""
+    from app.models import SummaryConfig
+
+    db = next(override_get_db())
+    cfg = db.query(SummaryConfig).filter(SummaryConfig.user_id == auth_client_summary.user_id).first()
+    # Trigger creation via GET
+    auth_client_summary.get("/settings/summary")
+    db2 = next(override_get_db())
+    cfg2 = db2.query(SummaryConfig).filter(SummaryConfig.user_id == auth_client_summary.user_id).first()
+    assert cfg2 is not None
+    assert cfg2.enabled is False
+    db.close()
+    db2.close()
+
+
+def test_settings_page_has_daily_summary_link(auth_client_summary):
+    """The main settings page must contain a link to /settings/summary."""
+    response = auth_client_summary.get("/settings")
+    assert response.status_code == 200
+    assert "/settings/summary" in response.text
+
+
+# ─── Summary notifiers (unit) ─────────────────────────────────────────────────
+
+def test_to_24h_conversion():
+    from app.routers.pages import _to_24h
+    assert _to_24h(12, "AM") == 0   # midnight
+    assert _to_24h(1, "AM") == 1
+    assert _to_24h(11, "AM") == 11
+    assert _to_24h(12, "PM") == 12  # noon
+    assert _to_24h(1, "PM") == 13
+    assert _to_24h(11, "PM") == 23
+
+
+def test_to_12h_conversion():
+    from app.routers.pages import _to_12h
+    assert _to_12h(0) == (12, "AM")   # midnight
+    assert _to_12h(1) == (1, "AM")
+    assert _to_12h(11) == (11, "AM")
+    assert _to_12h(12) == (12, "PM")  # noon
+    assert _to_12h(13) == (1, "PM")
+    assert _to_12h(23) == (11, "PM")
+
+
+def test_build_summary_body_no_shipments():
+    from app.notifiers import _build_summary_body
+    from unittest.mock import MagicMock
+
+    pending = [MagicMock(order_number="11111", label=None)]
+    body, all_shipped = _build_summary_body([], pending, check_count=12)
+    assert not all_shipped
+    assert "No new shipments" in body
+    assert "12 time" in body
+    assert "1 pending" in body
+
+
+def test_build_summary_body_all_shipped():
+    from app.notifiers import _build_summary_body
+    from unittest.mock import MagicMock
+
+    shipped = [MagicMock(order_number="11111", label="My Device", last_status="Shipped (AYN, 2026/3/4)")]
+    body, all_shipped = _build_summary_body(shipped, [], check_count=8)
+    assert all_shipped
+    assert "All your Ayntec orders have shipped" in body
+    assert "11111" in body
+    assert "8 time" in body
+
+
+def test_build_summary_body_mixed():
+    from app.notifiers import _build_summary_body
+    from unittest.mock import MagicMock
+
+    shipped = [MagicMock(order_number="11111", label=None, last_status="Shipped (AYN, 2026/3/4)")]
+    pending = [MagicMock(order_number="22222", label="Second")]
+    body, all_shipped = _build_summary_body(shipped, pending, check_count=5)
+    assert not all_shipped
+    assert "11111" in body
+    assert "22222" in body
+    assert "✅" in body
+    assert "⏳" in body
+
+
+# ─── Scheduler summary logic (unit) ──────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_maybe_send_summary_wrong_time_skips():
+    """_maybe_send_summary must skip when current time doesn't match delivery time."""
+    import datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.scheduler import _maybe_send_summary
+
+    config = MagicMock()
+    config.delivery_hour = 20
+    config.delivery_minute = 0
+    config.timezone = "UTC"
+    config.last_sent_at = None
+
+    now = datetime.datetime(2026, 3, 4, 10, 0, 0)  # UTC 10:00 ≠ configured 20:00
+    db = MagicMock()
+
+    with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
+        await _maybe_send_summary(db, config, now)
+        mock_dispatch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_maybe_send_summary_already_sent_today_skips():
+    """_maybe_send_summary must skip if a summary was already sent today."""
+    import datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.scheduler import _maybe_send_summary
+
+    today = datetime.datetime(2026, 3, 4, 20, 0, 0)
+    config = MagicMock()
+    config.delivery_hour = 20
+    config.delivery_minute = 0
+    config.timezone = "UTC"
+    config.last_sent_at = today  # already sent today
+
+    db = MagicMock()
+
+    with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
+        await _maybe_send_summary(db, config, today)
+        mock_dispatch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_maybe_send_summary_timezone_conversion():
+    """_maybe_send_summary should fire at the correct local time, not UTC."""
+    import datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.scheduler import _maybe_send_summary
+
+    # Config: send at 8:00 PM Eastern (ET = UTC-5 in winter)
+    config = MagicMock()
+    config.delivery_hour = 20   # 8 PM local
+    config.delivery_minute = 0
+    config.timezone = "America/New_York"
+    config.last_sent_at = None
+    config.user_id = 1
+
+    # UTC 01:00 on 2026-01-05 == Eastern 20:00 on 2026-01-04 (UTC-5)
+    now_utc = datetime.datetime(2026, 1, 5, 1, 0, 0)
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [MagicMock()]
+    db.query.return_value.filter.return_value.count.return_value = 5
+
+    with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
+        await _maybe_send_summary(db, config, now_utc)
+        mock_dispatch.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_maybe_send_summary_no_orders_skips():
+    """_maybe_send_summary must skip when user has no active orders."""
+    import datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.scheduler import _maybe_send_summary
+
+    config = MagicMock()
+    config.delivery_hour = 20
+    config.delivery_minute = 0
+    config.timezone = "UTC"
+    config.last_sent_at = None
+    config.user_id = 99
+
+    now = datetime.datetime(2026, 3, 4, 20, 0, 0)
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = []  # no orders
+
+    with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
+        await _maybe_send_summary(db, config, now)
+        mock_dispatch.assert_not_called()

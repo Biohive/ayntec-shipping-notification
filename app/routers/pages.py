@@ -1,6 +1,8 @@
 """Page routes: landing, dashboard, settings."""
 
 import logging
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -9,7 +11,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.csrf import verify_csrf
 from app.database import get_db
-from app.models import Order, NotificationSetting
+from app.models import Order, NotificationSetting, SummaryConfig
 from app.notifiers import send_discord, send_ntfy, send_email
 from app.security import validate_webhook_url
 from app.templates import templates
@@ -305,3 +307,134 @@ async def test_ntfy(
             db.refresh(notif)
             notif.ntfy_url = url
         return _test_response(request, user, notif, "NTFY test failed. Check the URL and try again.", success=False)
+
+
+def _to_24h(hour_12: int, ampm: str) -> int:
+    """Convert 12-hour clock (1–12, AM/PM) to 24-hour (0–23)."""
+    hour_12 = max(1, min(12, hour_12))
+    if ampm.upper() == "AM":
+        return 0 if hour_12 == 12 else hour_12
+    else:
+        return 12 if hour_12 == 12 else hour_12 + 12
+
+
+def _to_12h(hour_24: int) -> tuple[int, str]:
+    """Convert 24-hour (0–23) to 12-hour clock (1–12, AM/PM)."""
+    if hour_24 == 0:
+        return 12, "AM"
+    elif hour_24 < 12:
+        return hour_24, "AM"
+    elif hour_24 == 12:
+        return 12, "PM"
+    else:
+        return hour_24 - 12, "PM"
+
+
+def _summary_template_context(user, summary, notif, smtp_configured: bool, **extra) -> dict:
+    """Build the template context dict for summary_config.html."""
+    hour_12, ampm = _to_12h(summary.delivery_hour)
+    return {
+        "user": user,
+        "summary": summary,
+        "notif": notif,
+        "smtp_configured": smtp_configured,
+        "delivery_hour_12": hour_12,
+        "delivery_ampm": ampm,
+        **extra,
+    }
+
+
+@router.get("/settings/summary")
+async def summary_settings_page(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/auth/login")
+
+    notif = (
+        db.query(NotificationSetting)
+        .filter(NotificationSetting.user_id == user["db_id"])
+        .first()
+    )
+
+    summary = (
+        db.query(SummaryConfig)
+        .filter(SummaryConfig.user_id == user["db_id"])
+        .first()
+    )
+    if not summary:
+        summary = SummaryConfig(user_id=user["db_id"])
+        db.add(summary)
+        db.commit()
+        db.refresh(summary)
+
+    return templates.TemplateResponse(
+        request,
+        "summary_config.html",
+        _summary_template_context(user, summary, notif, bool(settings.smtp_host)),
+    )
+
+
+@router.post("/settings/summary")
+async def save_summary_settings(
+    request: Request,
+    _csrf: None = Depends(verify_csrf),
+    db: Session = Depends(get_db),
+    enabled: bool = Form(False),
+    delivery_hour_12: int = Form(8),
+    delivery_minute: int = Form(0),
+    delivery_ampm: str = Form("PM"),
+    delivery_timezone: str = Form("America/New_York"),
+    use_discord: bool = Form(False),
+    use_email: bool = Form(False),
+    use_ntfy: bool = Form(False),
+):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/auth/login")
+
+    # Convert 12h → 24h local time
+    delivery_hour_24 = _to_24h(delivery_hour_12, delivery_ampm)
+    delivery_minute = max(0, min(59, delivery_minute))
+
+    # Validate timezone (fall back to UTC on unrecognised value)
+    try:
+        ZoneInfo(delivery_timezone)
+        tz_str = delivery_timezone
+    except (ZoneInfoNotFoundError, KeyError):
+        logger.warning("Unrecognised timezone %r submitted by user %s – falling back to UTC", delivery_timezone, user.get("db_id"))
+        tz_str = "UTC"
+
+    notif = (
+        db.query(NotificationSetting)
+        .filter(NotificationSetting.user_id == user["db_id"])
+        .first()
+    )
+
+    summary = (
+        db.query(SummaryConfig)
+        .filter(SummaryConfig.user_id == user["db_id"])
+        .first()
+    )
+    if not summary:
+        summary = SummaryConfig(user_id=user["db_id"])
+        db.add(summary)
+
+    summary.enabled = enabled
+    summary.delivery_hour = delivery_hour_24
+    summary.delivery_minute = delivery_minute
+    summary.timezone = tz_str
+    summary.use_discord = use_discord
+    summary.use_email = use_email
+    summary.use_ntfy = use_ntfy
+
+    db.commit()
+    db.refresh(summary)
+
+    return templates.TemplateResponse(
+        request,
+        "summary_config.html",
+        _summary_template_context(
+            user, summary, notif, bool(settings.smtp_host),
+            success="Summary settings saved!",
+        ),
+    )
