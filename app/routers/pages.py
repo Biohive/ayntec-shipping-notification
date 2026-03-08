@@ -116,58 +116,65 @@ async def save_settings(
     )
 
 
-@router.post("/settings/test")
-async def test_notifications(request: Request, db: Session = Depends(get_db)):
+async def _get_notif_or_redirect(request, db):
     user = get_current_user(request)
     if not user:
-        return RedirectResponse(url="/auth/login")
-
+        return None, None, RedirectResponse(url="/auth/login")
     notif = (
         db.query(NotificationSetting)
         .filter(NotificationSetting.user_id == user["db_id"])
         .first()
     )
-    if not notif:
-        return templates.TemplateResponse(
-            request,
-            "settings.html",
-            {
-                "user": user,
-                "notif": NotificationSetting(user_id=user["db_id"]),
-                "error": "Save your settings first.",
-            },
-        )
+    return user, notif, None
 
-    results = []
 
-    if notif.discord_enabled and notif.discord_webhook_url:
-        try:
-            await send_discord(notif.discord_webhook_url, "TEST", "This is a test notification")
-            results.append("Discord \u2713")
-        except Exception:
-            results.append("Discord \u2717")
-
-    if notif.ntfy_enabled and notif.ntfy_url:
-        try:
-            await send_ntfy(notif.ntfy_url, "TEST", "This is a test notification")
-            results.append("NTFY \u2713")
-        except Exception:
-            results.append("NTFY \u2717")
-
-    if notif.email_enabled and notif.email_address:
-        try:
-            send_email(notif.email_address, "TEST", "This is a test notification")
-            results.append("Email \u2713")
-        except Exception:
-            results.append("Email \u2717")
-
-    if not results:
-        message = "No channels enabled. Enable at least one channel and save first."
-    else:
-        message = "Test sent: " + ", ".join(results)
-
+def _test_response(request, user, notif, message, success=True):
+    key = "success" if success else "error"
     return templates.TemplateResponse(
-        request,
-        "settings.html",
-        {"user": user, "notif": notif, "success": message},
+        request, "settings.html", {"user": user, "notif": notif, key: message},
     )
+
+
+@router.post("/settings/test/discord")
+async def test_discord(request: Request, db: Session = Depends(get_db)):
+    user, notif, redirect = await _get_notif_or_redirect(request, db)
+    if redirect:
+        return redirect
+    if not notif or not notif.discord_webhook_url:
+        return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
+                              "Save a Discord webhook URL first.", success=False)
+    try:
+        await send_discord(notif.discord_webhook_url, "TEST", "This is a test notification")
+        return _test_response(request, user, notif, "Discord test sent \u2713")
+    except Exception as exc:
+        return _test_response(request, user, notif, f"Discord test failed: {exc}", success=False)
+
+
+@router.post("/settings/test/email")
+async def test_email(request: Request, db: Session = Depends(get_db)):
+    user, notif, redirect = await _get_notif_or_redirect(request, db)
+    if redirect:
+        return redirect
+    if not notif or not notif.email_address:
+        return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
+                              "Save an email address first.", success=False)
+    try:
+        send_email(notif.email_address, "TEST", "This is a test notification")
+        return _test_response(request, user, notif, "Email test sent \u2713")
+    except Exception as exc:
+        return _test_response(request, user, notif, f"Email test failed: {exc}", success=False)
+
+
+@router.post("/settings/test/ntfy")
+async def test_ntfy(request: Request, db: Session = Depends(get_db)):
+    user, notif, redirect = await _get_notif_or_redirect(request, db)
+    if redirect:
+        return redirect
+    if not notif or not notif.ntfy_url:
+        return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
+                              "Save an NTFY URL first.", success=False)
+    try:
+        await send_ntfy(notif.ntfy_url, "TEST", "This is a test notification")
+        return _test_response(request, user, notif, "NTFY test sent \u2713")
+    except Exception as exc:
+        return _test_response(request, user, notif, f"NTFY test failed: {exc}", success=False)

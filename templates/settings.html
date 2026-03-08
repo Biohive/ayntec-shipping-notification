@@ -26,6 +26,15 @@
     </div>
     {% endif %}
 
+    {% if error %}
+    <div class="mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      {{ error }}
+    </div>
+    {% endif %}
+
     <form action="/settings" method="post" class="space-y-8">
 
       <!-- Discord -->
@@ -42,11 +51,17 @@
               <p class="text-xs text-gray-400">Webhook URL</p>
             </div>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" name="discord_enabled" value="true" class="sr-only peer"
-                   {% if notif.discord_enabled %}checked{% endif %}>
-            <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
-          </label>
+          <div class="flex items-center gap-2">
+            <button type="submit" formaction="/settings/test/discord" formmethod="post"
+                    class="text-xs text-gray-500 hover:text-indigo-600 border border-gray-300 hover:border-indigo-400 rounded-lg px-2 py-1">
+              Test
+            </button>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" name="discord_enabled" value="true" class="sr-only peer"
+                     {% if notif.discord_enabled %}checked{% endif %}>
+              <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+            </label>
+          </div>
         </div>
         <input type="url" name="discord_webhook_url"
                value="{{ notif.discord_webhook_url or '' }}"
@@ -68,11 +83,17 @@
               <p class="text-xs text-gray-400">Requires SMTP configured by admin</p>
             </div>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" name="email_enabled" value="true" class="sr-only peer"
-                   {% if notif.email_enabled %}checked{% endif %}>
-            <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
-          </label>
+          <div class="flex items-center gap-2">
+            <button type="submit" formaction="/settings/test/email" formmethod="post"
+                    class="text-xs text-gray-500 hover:text-green-600 border border-gray-300 hover:border-green-400 rounded-lg px-2 py-1">
+              Test
+            </button>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" name="email_enabled" value="true" class="sr-only peer"
+                     {% if notif.email_enabled %}checked{% endif %}>
+              <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+            </label>
+          </div>
         </div>
         <input type="email" name="email_address"
                value="{{ notif.email_address or '' }}"
@@ -94,11 +115,17 @@
               <p class="text-xs text-gray-400">ntfy.sh or self-hosted topic URL</p>
             </div>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" name="ntfy_enabled" value="true" class="sr-only peer"
-                   {% if notif.ntfy_enabled %}checked{% endif %}>
-            <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
-          </label>
+          <div class="flex items-center gap-2">
+            <button type="submit" formaction="/settings/test/ntfy" formmethod="post"
+                    class="text-xs text-gray-500 hover:text-orange-600 border border-gray-300 hover:border-orange-400 rounded-lg px-2 py-1">
+              Test
+            </button>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" name="ntfy_enabled" value="true" class="sr-only peer"
+                     {% if notif.ntfy_enabled %}checked{% endif %}>
+              <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
+            </label>
+          </div>
         </div>
         <input type="url" name="ntfy_url"
                value="{{ notif.ntfy_url or '' }}"
@@ -112,14 +139,7 @@
       </button>
     </form>
 
-    <!-- Test Notification -->
-    <form action="/settings/test" method="post" class="mt-4">
-      <button type="submit"
-              class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm border border-gray-300">
-        &#x1F514; Send Test Notification
-      </button>
-      <p class="text-xs text-gray-400 text-center mt-2">Sends a test to all enabled channels using your saved settings.</p>
-    </form>
+
   </div>
 </div>
 {% endblock %}
