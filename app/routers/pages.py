@@ -44,7 +44,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"user": user, "orders": orders},
+        {"user": user, "orders": orders, "poll_minutes": settings.poll_interval_seconds // 60},
     )
 
 

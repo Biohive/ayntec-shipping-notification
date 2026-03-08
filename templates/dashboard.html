@@ -11,7 +11,7 @@
       <h1 class="text-2xl font-bold text-gray-900">My Orders</h1>
       <p class="text-sm text-gray-500 mt-1">
         Tracking {{ orders | length }} order{{ 's' if orders | length != 1 else '' }}.
-        Checked every 5&nbsp;minutes.
+        Checked every {{ poll_minutes }}&nbsp;minute{{ 's' if poll_minutes != 1 else '' }}.
       </p>
     </div>
     <a href="/orders/add"
