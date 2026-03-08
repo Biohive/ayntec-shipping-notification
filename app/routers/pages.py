@@ -1,6 +1,7 @@
 """Page routes: landing, dashboard, settings."""
 
 import logging
+import os
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -69,7 +70,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {"user": user, "notif": notif},
+        {"user": user, "notif": notif, "smtp_configured": bool(os.getenv("SMTP_HOST", ""))},
     )
 
 
@@ -111,6 +112,7 @@ async def save_settings(
         {
             "user": user,
             "notif": notif,
+            "smtp_configured": bool(os.getenv("SMTP_HOST", "")),
             "success": "Settings saved!",
         },
     )
@@ -131,7 +133,8 @@ async def _get_notif_or_redirect(request, db):
 def _test_response(request, user, notif, message, success=True):
     key = "success" if success else "error"
     return templates.TemplateResponse(
-        request, "settings.html", {"user": user, "notif": notif, key: message},
+        request, "settings.html",
+        {"user": user, "notif": notif, "smtp_configured": bool(os.getenv("SMTP_HOST", "")), key: message},
     )
 
 
