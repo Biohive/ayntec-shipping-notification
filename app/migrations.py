@@ -58,9 +58,41 @@ def _m001_add_notification_tested_columns(conn: Connection) -> None:
             ))
 
 
+def _m002_add_check_logs_and_summary_configs(conn: Connection) -> None:
+    """Add check_logs and summary_configs tables for daily summary feature."""
+    from sqlalchemy import inspect
+    insp = inspect(conn)
+    existing_tables = insp.get_table_names()
+
+    if "check_logs" not in existing_tables:
+        conn.execute(text(
+            "CREATE TABLE check_logs ("
+            "  id INTEGER PRIMARY KEY,"
+            "  user_id INTEGER NOT NULL REFERENCES users(id),"
+            "  checked_at DATETIME NOT NULL"
+            ")"
+        ))
+
+    if "summary_configs" not in existing_tables:
+        conn.execute(text(
+            "CREATE TABLE summary_configs ("
+            "  id INTEGER PRIMARY KEY,"
+            "  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),"
+            "  enabled BOOLEAN NOT NULL DEFAULT 0,"
+            "  delivery_hour INTEGER NOT NULL DEFAULT 20,"
+            "  delivery_minute INTEGER NOT NULL DEFAULT 0,"
+            "  use_discord BOOLEAN NOT NULL DEFAULT 1,"
+            "  use_email BOOLEAN NOT NULL DEFAULT 1,"
+            "  use_ntfy BOOLEAN NOT NULL DEFAULT 1,"
+            "  last_sent_at DATETIME"
+            ")"
+        ))
+
+
 # Ordered list of migrations.  Index 0 → version 1, index 1 → version 2, etc.
 MIGRATIONS: list = [
     _m001_add_notification_tested_columns,
+    _m002_add_check_logs_and_summary_configs,
 ]
 
 
