@@ -57,11 +57,11 @@ def validate_webhook_url(url: str, *, label: str = "URL") -> str:
     """Validate that *url* is safe to use as an outbound webhook target.
 
     Checks performed:
-    - Must use the ``https`` scheme.
+    - Must use the `https` scheme.
     - Host must be present.
     - Host must not be a private/loopback IP address or a localhost hostname.
 
-    Returns the stripped URL if valid, or raises ``ValueError`` with a
+    Returns the stripped URL if valid, or raises `ValueError` with a
     human-readable message describing the problem.
     """
     if not url or not url.strip():
