@@ -8,12 +8,8 @@ A web application that lets users track **Ayntec order numbers** and receive ins
 
 ## Features
 
-- 🔒 **OIDC login** via [Authentik](https://goauthentik.io/) — no passwords to manage
 - 📦 **Track multiple orders** per user
 - 🔔 **Multi-channel notifications**: Discord webhooks, Email (SMTP), [NTFY](https://ntfy.sh/)
-- ⏱️ **Automatic polling** every 5 minutes per order
-- 🎨 **Clean, modern UI** built with Tailwind CSS
-- 🐳 **Docker-ready** for easy self-hosting
 
 ---
 
@@ -62,8 +58,9 @@ DEBUG=true uvicorn app.main:app --reload
 1. In Authentik, create a new **OAuth2/OpenID Connect Provider** with:
    - Redirect URI: `https://your-domain.example.com/auth/callback`
    - Scopes: `openid`, `email`, `profile`
-2. Create an **Application** linked to that provider.
-3. Copy the **Client ID**, **Client Secret**, and **OIDC Discovery URL** into your `.env`.
+2. Enable `Signing Key`
+3. Create an **Application** linked to that provider.
+4. Copy the **Client ID**, **Client Secret**, and **OIDC Discovery URL** into your `.env`.
 
 ---
 
