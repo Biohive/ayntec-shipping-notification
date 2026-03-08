@@ -171,6 +171,17 @@ def _test_response(request, user, notif, message, success=True):
     )
 
 
+def _empty_field_response(request, user, notif, field: str, message: str):
+    """Return an error response for an empty submission, showing a blank field.
+
+    The submitted value was empty, so we clear *field* on the display object so
+    the form does not revert to the stale database value.
+    """
+    display = notif or NotificationSetting(user_id=user["db_id"])
+    setattr(display, field, None)
+    return _test_response(request, user, display, message, success=False)
+
+
 @router.post("/settings/test/discord")
 async def test_discord(
     request: Request,
@@ -183,8 +194,8 @@ async def test_discord(
         return redirect
     url = discord_webhook_url.strip()
     if not url:
-        return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
-                              "Enter a Discord webhook URL first.", success=False)
+        return _empty_field_response(request, user, notif, "discord_webhook_url",
+                                     "Enter a Discord webhook URL first.")
     try:
         validate_webhook_url(url, label="Discord webhook URL")
         await send_discord(url, "TEST", "This is a test notification")
@@ -192,14 +203,21 @@ async def test_discord(
             notif.discord_tested = True
             db.commit()
             db.refresh(notif)
+            # Set after refresh so the submitted URL appears in the re-rendered form
+            # without being persisted (no subsequent commit).
+            notif.discord_webhook_url = url
         return _test_response(request, user, notif, "Discord test sent")
     except ValueError as exc:
+        if notif:
+            # No commit follows, so this only affects the rendered response.
+            notif.discord_webhook_url = url
         return _test_response(request, user, notif, str(exc), success=False)
     except Exception:
         if notif:
             notif.discord_tested = False
             db.commit()
             db.refresh(notif)
+            notif.discord_webhook_url = url
         return _test_response(request, user, notif, "Discord test failed. Check the webhook URL and try again.", success=False)
 
 
@@ -215,20 +233,24 @@ async def test_email(
         return redirect
     addr = email_address.strip()
     if not addr:
-        return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
-                              "Enter an email address first.", success=False)
+        return _empty_field_response(request, user, notif, "email_address",
+                                     "Enter an email address first.")
     try:
         send_email(addr, "TEST", "This is a test notification")
         if notif:
             notif.email_tested = True
             db.commit()
             db.refresh(notif)
+            # Set after refresh so the submitted address appears in the re-rendered form
+            # without being persisted (no subsequent commit).
+            notif.email_address = addr
         return _test_response(request, user, notif, "Email test sent")
     except Exception:
         if notif:
             notif.email_tested = False
             db.commit()
             db.refresh(notif)
+            notif.email_address = addr
         return _test_response(request, user, notif, "Email test failed. Check your SMTP settings.", success=False)
 
 
@@ -244,8 +266,8 @@ async def test_ntfy(
         return redirect
     url = ntfy_url.strip()
     if not url:
-        return _test_response(request, user, notif or NotificationSetting(user_id=user["db_id"]),
-                              "Enter an NTFY URL first.", success=False)
+        return _empty_field_response(request, user, notif, "ntfy_url",
+                                     "Enter an NTFY URL first.")
     try:
         validate_webhook_url(url, label="NTFY URL")
         await send_ntfy(url, "TEST", "This is a test notification")
@@ -253,12 +275,19 @@ async def test_ntfy(
             notif.ntfy_tested = True
             db.commit()
             db.refresh(notif)
+            # Set after refresh so the submitted URL appears in the re-rendered form
+            # without being persisted (no subsequent commit).
+            notif.ntfy_url = url
         return _test_response(request, user, notif, "NTFY test sent")
     except ValueError as exc:
+        if notif:
+            # No commit follows, so this only affects the rendered response.
+            notif.ntfy_url = url
         return _test_response(request, user, notif, str(exc), success=False)
     except Exception:
         if notif:
             notif.ntfy_tested = False
             db.commit()
             db.refresh(notif)
+            notif.ntfy_url = url
         return _test_response(request, user, notif, "NTFY test failed. Check the URL and try again.", success=False)
