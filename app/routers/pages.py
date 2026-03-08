@@ -44,10 +44,24 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         .order_by(Order.created_at.desc())
         .all()
     )
+    notif = (
+        db.query(NotificationSetting)
+        .filter(NotificationSetting.user_id == user["db_id"])
+        .first()
+    )
+    has_enabled_notif = bool(
+        notif
+        and (notif.discord_enabled or notif.email_enabled or notif.ntfy_enabled)
+    )
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"user": user, "orders": orders, "poll_minutes": settings.poll_interval_seconds // 60},
+        {
+            "user": user,
+            "orders": orders,
+            "poll_minutes": settings.poll_interval_seconds // 60,
+            "has_enabled_notif": has_enabled_notif,
+        },
     )
 
 
