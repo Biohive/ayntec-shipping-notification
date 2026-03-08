@@ -59,34 +59,85 @@
 
       <!-- Delivery time -->
       <div class="border border-gray-200 rounded-xl p-5">
-        <h3 class="font-semibold text-gray-900 mb-1">Delivery Time <span class="text-xs font-normal text-gray-400">(UTC)</span></h3>
-        <p class="text-xs text-gray-400 mb-4">Choose when to receive the daily summary. Times are in UTC.</p>
-        <div class="flex items-center gap-3">
+        <h3 class="font-semibold text-gray-900 mb-1">Delivery Time</h3>
+        <p class="text-xs text-gray-400 mb-4">Choose when to receive the daily summary in your local time.</p>
+        <div class="flex flex-wrap items-end gap-3">
+          <!-- Hour -->
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-gray-500" for="delivery_hour">Hour (0–23)</label>
-            <input type="number" id="delivery_hour" name="delivery_hour"
-                   min="0" max="23" value="{{ summary.delivery_hour }}"
-                   class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"/>
+            <label class="text-xs text-gray-500" for="delivery_hour_12">Hour</label>
+            <select id="delivery_hour_12" name="delivery_hour_12"
+                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+              {% for h in range(1, 13) %}
+              <option value="{{ h }}" {% if h == delivery_hour_12 %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+              {% endfor %}
+            </select>
           </div>
-          <span class="text-gray-400 mt-5 text-lg">:</span>
+          <span class="text-gray-400 mb-2 text-lg leading-none">:</span>
+          <!-- Minute (5-minute intervals) -->
           <div class="flex flex-col gap-1">
-            <label class="text-xs text-gray-500" for="delivery_minute">Minute (0–59)</label>
-            <input type="number" id="delivery_minute" name="delivery_minute"
-                   min="0" max="59" value="{{ summary.delivery_minute }}"
-                   class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"/>
+            <label class="text-xs text-gray-500" for="delivery_minute">Minute</label>
+            <select id="delivery_minute" name="delivery_minute"
+                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+              {% for m in range(0, 60, 5) %}
+              <option value="{{ m }}" {% if m == summary.delivery_minute %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <!-- AM/PM -->
+          <div class="flex flex-col gap-1">
+            <label class="text-xs text-gray-500" for="delivery_ampm">AM / PM</label>
+            <select id="delivery_ampm" name="delivery_ampm"
+                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+              <option value="AM" {% if delivery_ampm == "AM" %}selected{% endif %}>AM</option>
+              <option value="PM" {% if delivery_ampm == "PM" %}selected{% endif %}>PM</option>
+            </select>
+          </div>
+          <!-- Timezone -->
+          <div class="flex flex-col gap-1 flex-1 min-w-48">
+            <label class="text-xs text-gray-500" for="delivery_timezone">Timezone</label>
+            <select id="delivery_timezone" name="delivery_timezone"
+                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+              <optgroup label="North America">
+                <option value="America/New_York"       {% if summary.timezone == "America/New_York"       %}selected{% endif %}>Eastern Time (ET)</option>
+                <option value="America/Chicago"        {% if summary.timezone == "America/Chicago"        %}selected{% endif %}>Central Time (CT)</option>
+                <option value="America/Denver"         {% if summary.timezone == "America/Denver"         %}selected{% endif %}>Mountain Time (MT)</option>
+                <option value="America/Los_Angeles"    {% if summary.timezone == "America/Los_Angeles"    %}selected{% endif %}>Pacific Time (PT)</option>
+                <option value="America/Anchorage"      {% if summary.timezone == "America/Anchorage"      %}selected{% endif %}>Alaska Time (AKT)</option>
+                <option value="Pacific/Honolulu"       {% if summary.timezone == "Pacific/Honolulu"       %}selected{% endif %}>Hawaii Time (HT)</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option value="UTC"                    {% if summary.timezone == "UTC"                    %}selected{% endif %}>UTC / GMT</option>
+                <option value="Europe/London"          {% if summary.timezone == "Europe/London"          %}selected{% endif %}>London (GMT/BST)</option>
+                <option value="Europe/Paris"           {% if summary.timezone == "Europe/Paris"           %}selected{% endif %}>Central European (CET/CEST)</option>
+                <option value="Europe/Helsinki"        {% if summary.timezone == "Europe/Helsinki"        %}selected{% endif %}>Eastern European (EET/EEST)</option>
+                <option value="Europe/Moscow"          {% if summary.timezone == "Europe/Moscow"          %}selected{% endif %}>Moscow (MSK)</option>
+              </optgroup>
+              <optgroup label="Asia / Pacific">
+                <option value="Asia/Dubai"             {% if summary.timezone == "Asia/Dubai"             %}selected{% endif %}>Dubai (GST)</option>
+                <option value="Asia/Kolkata"           {% if summary.timezone == "Asia/Kolkata"           %}selected{% endif %}>India (IST)</option>
+                <option value="Asia/Bangkok"           {% if summary.timezone == "Asia/Bangkok"           %}selected{% endif %}>Bangkok (ICT)</option>
+                <option value="Asia/Singapore"         {% if summary.timezone == "Asia/Singapore"         %}selected{% endif %}>Singapore (SGT)</option>
+                <option value="Asia/Shanghai"          {% if summary.timezone == "Asia/Shanghai"          %}selected{% endif %}>China (CST)</option>
+                <option value="Asia/Tokyo"             {% if summary.timezone == "Asia/Tokyo"             %}selected{% endif %}>Japan (JST)</option>
+                <option value="Asia/Seoul"             {% if summary.timezone == "Asia/Seoul"             %}selected{% endif %}>Korea (KST)</option>
+                <option value="Australia/Sydney"       {% if summary.timezone == "Australia/Sydney"       %}selected{% endif %}>Sydney (AEST/AEDT)</option>
+                <option value="Pacific/Auckland"       {% if summary.timezone == "Pacific/Auckland"       %}selected{% endif %}>Auckland (NZST/NZDT)</option>
+              </optgroup>
+            </select>
           </div>
         </div>
       </div>
 
       <!-- Delivery channels -->
-      <div class="border border-gray-200 rounded-xl p-5">
+      <div id="channels-section" class="border border-gray-200 rounded-xl p-5 transition-opacity duration-200">
         <h3 class="font-semibold text-gray-900 mb-1">Delivery Channels</h3>
-        <p class="text-xs text-gray-400 mb-4">Select which of your enabled notification channels should receive the summary.</p>
+        <p class="text-xs text-gray-400 mb-4">Select which of your enabled notification channels should receive the summary. Enable the daily summary above first.</p>
 
         <div class="space-y-3">
 
           <!-- Discord -->
-          <div class="flex items-center justify-between py-2 {% if not notif or not notif.discord_enabled %}opacity-50{% endif %}">
+          {% set discord_available = notif and notif.discord_enabled %}
+          <div class="flex items-center justify-between py-2 {% if not discord_available %}opacity-50{% endif %}">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <svg class="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 24 24">
@@ -95,21 +146,24 @@
               </div>
               <div>
                 <span class="text-sm font-medium text-gray-900">Discord</span>
-                {% if not notif or not notif.discord_enabled %}
+                {% if not discord_available %}
                 <p class="text-xs text-gray-400">Not enabled in notification settings</p>
                 {% endif %}
               </div>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" name="use_discord" value="true" class="sr-only peer"
-                     {% if summary.use_discord %}checked{% endif %}
-                     {% if not notif or not notif.discord_enabled %}disabled{% endif %}>
+            <label class="relative inline-flex items-center {% if discord_available %}cursor-pointer{% else %}cursor-not-allowed{% endif %}">
+              <input type="checkbox" name="use_discord" value="true"
+                     class="sr-only peer channel-toggle"
+                     data-available="{{ 'true' if discord_available else 'false' }}"
+                     {% if summary.use_discord and discord_available %}checked{% endif %}
+                     {% if not discord_available %}disabled{% endif %}>
               <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
             </label>
           </div>
 
           <!-- Email -->
-          <div class="flex items-center justify-between py-2 {% if not notif or not notif.email_enabled or not smtp_configured %}opacity-50{% endif %}">
+          {% set email_available = notif and notif.email_enabled and smtp_configured %}
+          <div class="flex items-center justify-between py-2 {% if not email_available %}opacity-50{% endif %}">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -120,21 +174,24 @@
                 <span class="text-sm font-medium text-gray-900">Email</span>
                 {% if not smtp_configured %}
                 <p class="text-xs text-gray-400">SMTP not configured by admin</p>
-                {% elif not notif or not notif.email_enabled %}
+                {% elif not email_available %}
                 <p class="text-xs text-gray-400">Not enabled in notification settings</p>
                 {% endif %}
               </div>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" name="use_email" value="true" class="sr-only peer"
-                     {% if summary.use_email %}checked{% endif %}
-                     {% if not notif or not notif.email_enabled or not smtp_configured %}disabled{% endif %}>
+            <label class="relative inline-flex items-center {% if email_available %}cursor-pointer{% else %}cursor-not-allowed{% endif %}">
+              <input type="checkbox" name="use_email" value="true"
+                     class="sr-only peer channel-toggle"
+                     data-available="{{ 'true' if email_available else 'false' }}"
+                     {% if summary.use_email and email_available %}checked{% endif %}
+                     {% if not email_available %}disabled{% endif %}>
               <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
             </label>
           </div>
 
           <!-- NTFY -->
-          <div class="flex items-center justify-between py-2 {% if not notif or not notif.ntfy_enabled %}opacity-50{% endif %}">
+          {% set ntfy_available = notif and notif.ntfy_enabled %}
+          <div class="flex items-center justify-between py-2 {% if not ntfy_available %}opacity-50{% endif %}">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <svg class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -143,15 +200,17 @@
               </div>
               <div>
                 <span class="text-sm font-medium text-gray-900">NTFY</span>
-                {% if not notif or not notif.ntfy_enabled %}
+                {% if not ntfy_available %}
                 <p class="text-xs text-gray-400">Not enabled in notification settings</p>
                 {% endif %}
               </div>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" name="use_ntfy" value="true" class="sr-only peer"
-                     {% if summary.use_ntfy %}checked{% endif %}
-                     {% if not notif or not notif.ntfy_enabled %}disabled{% endif %}>
+            <label class="relative inline-flex items-center {% if ntfy_available %}cursor-pointer{% else %}cursor-not-allowed{% endif %}">
+              <input type="checkbox" name="use_ntfy" value="true"
+                     class="sr-only peer channel-toggle"
+                     data-available="{{ 'true' if ntfy_available else 'false' }}"
+                     {% if summary.use_ntfy and ntfy_available %}checked{% endif %}
+                     {% if not ntfy_available %}disabled{% endif %}>
               <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-brand-600 peer-focus:ring-2 peer-focus:ring-brand-300 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
             </label>
           </div>
@@ -166,4 +225,28 @@
     </form>
   </div>
 </div>
+
+<script>
+(function () {
+  const summaryToggle = document.getElementById('summary-enabled');
+  const channelToggles = document.querySelectorAll('.channel-toggle');
+
+  function applyChannelState() {
+    const summaryOn = summaryToggle.checked;
+    channelToggles.forEach(function (toggle) {
+      const available = toggle.dataset.available === 'true';
+      // A channel toggle is interactive only when:
+      //   1. The summary is enabled, AND
+      //   2. The underlying notification channel is configured/enabled
+      toggle.disabled = !(summaryOn && available);
+    });
+  }
+
+  // Set initial state on page load
+  applyChannelState();
+
+  // React to the summary toggle being flipped
+  summaryToggle.addEventListener('change', applyChannelState);
+})();
+</script>
 {% endblock %}

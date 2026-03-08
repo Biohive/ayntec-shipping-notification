@@ -89,10 +89,32 @@ def _m002_add_check_logs_and_summary_configs(conn: Connection) -> None:
         ))
 
 
+def _m003_add_summary_timezone_and_fix_defaults(conn: Connection) -> None:
+    """Add timezone column to summary_configs and fix channel defaults to false."""
+    from sqlalchemy import inspect
+    insp = inspect(conn)
+    existing_tables = insp.get_table_names()
+    if "summary_configs" in existing_tables:
+        existing_cols = {c["name"] for c in insp.get_columns("summary_configs")}
+        if "timezone" not in existing_cols:
+            conn.execute(text(
+                "ALTER TABLE summary_configs ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/New_York'"
+            ))
+        # Fix any existing rows that had all-true defaults for use_* columns
+        # (only when all three are true and the config was never enabled — treat
+        #  those as "just created with bad defaults" and reset them to false).
+        conn.execute(text(
+            "UPDATE summary_configs "
+            "SET use_discord = 0, use_email = 0, use_ntfy = 0 "
+            "WHERE enabled = 0 AND use_discord = 1 AND use_email = 1 AND use_ntfy = 1"
+        ))
+
+
 # Ordered list of migrations.  Index 0 → version 1, index 1 → version 2, etc.
 MIGRATIONS: list = [
     _m001_add_notification_tested_columns,
     _m002_add_check_logs_and_summary_configs,
+    _m003_add_summary_timezone_and_fix_defaults,
 ]
 
 

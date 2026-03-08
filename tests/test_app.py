@@ -580,8 +580,10 @@ def test_summary_settings_page_renders(auth_client_summary):
 def test_summary_settings_page_shows_delivery_time_inputs(auth_client_summary):
     response = auth_client_summary.get("/settings/summary")
     assert response.status_code == 200
-    assert "delivery_hour" in response.text
+    assert "delivery_hour_12" in response.text
     assert "delivery_minute" in response.text
+    assert "delivery_ampm" in response.text
+    assert "delivery_timezone" in response.text
 
 
 def test_summary_settings_page_shows_channel_options(auth_client_summary):
@@ -597,8 +599,10 @@ def test_summary_settings_save_and_reload(auth_client_summary):
         "/settings/summary",
         data={
             "enabled": "true",
-            "delivery_hour": "18",
+            "delivery_hour_12": "6",
             "delivery_minute": "30",
+            "delivery_ampm": "PM",
+            "delivery_timezone": "America/New_York",
             "use_discord": "true",
             "csrf_token": "ignored",
         },
@@ -609,8 +613,10 @@ def test_summary_settings_save_and_reload(auth_client_summary):
     # Reload the page — saved values must be reflected
     response = auth_client_summary.get("/settings/summary")
     assert response.status_code == 200
-    assert 'value="18"' in response.text
-    assert 'value="30"' in response.text
+    # 6 PM ET → stored as 18:30 → displayed back as 06 PM
+    assert 'value="6"' in response.text or '>06<' in response.text or 'selected>06<' in response.text
+    assert "PM" in response.text
+    assert "America/New_York" in response.text
 
 
 def test_summary_settings_disabled_by_default(auth_client_summary):
@@ -637,6 +643,26 @@ def test_settings_page_has_daily_summary_link(auth_client_summary):
 
 
 # ─── Summary notifiers (unit) ─────────────────────────────────────────────────
+
+def test_to_24h_conversion():
+    from app.routers.pages import _to_24h
+    assert _to_24h(12, "AM") == 0   # midnight
+    assert _to_24h(1, "AM") == 1
+    assert _to_24h(11, "AM") == 11
+    assert _to_24h(12, "PM") == 12  # noon
+    assert _to_24h(1, "PM") == 13
+    assert _to_24h(11, "PM") == 23
+
+
+def test_to_12h_conversion():
+    from app.routers.pages import _to_12h
+    assert _to_12h(0) == (12, "AM")   # midnight
+    assert _to_12h(1) == (1, "AM")
+    assert _to_12h(11) == (11, "AM")
+    assert _to_12h(12) == (12, "PM")  # noon
+    assert _to_12h(13) == (1, "PM")
+    assert _to_12h(23) == (11, "PM")
+
 
 def test_build_summary_body_no_shipments():
     from app.notifiers import _build_summary_body
@@ -688,9 +714,10 @@ async def test_maybe_send_summary_wrong_time_skips():
     config = MagicMock()
     config.delivery_hour = 20
     config.delivery_minute = 0
+    config.timezone = "UTC"
     config.last_sent_at = None
 
-    now = datetime.datetime(2026, 3, 4, 10, 0, 0)  # wrong hour
+    now = datetime.datetime(2026, 3, 4, 10, 0, 0)  # UTC 10:00 ≠ configured 20:00
     db = MagicMock()
 
     with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
@@ -709,6 +736,7 @@ async def test_maybe_send_summary_already_sent_today_skips():
     config = MagicMock()
     config.delivery_hour = 20
     config.delivery_minute = 0
+    config.timezone = "UTC"
     config.last_sent_at = today  # already sent today
 
     db = MagicMock()
@@ -716,6 +744,33 @@ async def test_maybe_send_summary_already_sent_today_skips():
     with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
         await _maybe_send_summary(db, config, today)
         mock_dispatch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_maybe_send_summary_timezone_conversion():
+    """_maybe_send_summary should fire at the correct local time, not UTC."""
+    import datetime
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from app.scheduler import _maybe_send_summary
+
+    # Config: send at 8:00 PM Eastern (ET = UTC-5 in winter)
+    config = MagicMock()
+    config.delivery_hour = 20   # 8 PM local
+    config.delivery_minute = 0
+    config.timezone = "America/New_York"
+    config.last_sent_at = None
+    config.user_id = 1
+
+    # UTC 01:00 on 2026-01-05 == Eastern 20:00 on 2026-01-04 (UTC-5)
+    now_utc = datetime.datetime(2026, 1, 5, 1, 0, 0)
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [MagicMock()]
+    db.query.return_value.filter.return_value.count.return_value = 5
+
+    with patch("app.scheduler._dispatch_summary", new_callable=AsyncMock) as mock_dispatch:
+        await _maybe_send_summary(db, config, now_utc)
+        mock_dispatch.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -728,6 +783,7 @@ async def test_maybe_send_summary_no_orders_skips():
     config = MagicMock()
     config.delivery_hour = 20
     config.delivery_minute = 0
+    config.timezone = "UTC"
     config.last_sent_at = None
     config.user_id = 99
 

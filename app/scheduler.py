@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 import logging
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -120,12 +121,27 @@ async def _maybe_send_summary(
     db: Session, config: SummaryConfig, now: datetime.datetime
 ) -> None:
     """Send a summary for *config* if the delivery time has arrived and it hasn't been sent today."""
-    if now.hour != config.delivery_hour or now.minute != config.delivery_minute:
+    # Resolve the user's timezone; fall back to UTC on any error
+    try:
+        tz = ZoneInfo(config.timezone or "UTC")
+    except (ZoneInfoNotFoundError, KeyError):
+        logger.warning(
+            "Unknown timezone %r for summary config user_id=%s – falling back to UTC",
+            config.timezone, config.user_id,
+        )
+        tz = ZoneInfo("UTC")
+
+    # Convert UTC now to the user's local time for comparison
+    now_local = now.replace(tzinfo=datetime.timezone.utc).astimezone(tz)
+
+    if now_local.hour != config.delivery_hour or now_local.minute != config.delivery_minute:
         return
 
-    # Prevent sending more than once per calendar day (UTC)
-    if config.last_sent_at and config.last_sent_at.date() == now.date():
-        return
+    # Prevent sending more than once per calendar day (in the user's local timezone)
+    if config.last_sent_at:
+        last_local = config.last_sent_at.replace(tzinfo=datetime.timezone.utc).astimezone(tz)
+        if last_local.date() == now_local.date():
+            return
 
     # Skip if the user has no active orders at all
     orders = (

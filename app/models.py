@@ -92,14 +92,15 @@ class SummaryConfig(Base):
 
     enabled = Column(Boolean, default=False)
 
-    # Delivery time in UTC (hour 0-23, minute 0-59)
+    # Delivery time stored in the user's local timezone (hour 0-23, minute 0-59)
     delivery_hour = Column(Integer, default=20)
     delivery_minute = Column(Integer, default=0)
+    timezone = Column(String, default="America/New_York")
 
-    # Which enabled notification channels to use for the summary
-    use_discord = Column(Boolean, default=True)
-    use_email = Column(Boolean, default=True)
-    use_ntfy = Column(Boolean, default=True)
+    # Which enabled notification channels to use for the summary (default off)
+    use_discord = Column(Boolean, default=False)
+    use_email = Column(Boolean, default=False)
+    use_ntfy = Column(Boolean, default=False)
 
     # Prevents sending the summary more than once per day
     last_sent_at = Column(DateTime, nullable=True)
