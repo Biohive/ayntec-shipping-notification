@@ -60,7 +60,6 @@ def send_email(to_address: str, order_number: str, status: str) -> None:
     body = (
         f"Good news! Your Ayntec order #{order_number} has shipped.\n\n"
         f"Status: {status}\n\n"
-        f"Track your order at: {settings.ayntec_order_url.format(order_id=order_number)}\n\n"
         f"-- Ayntec Shipping Notifier"
     )
 

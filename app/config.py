@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     # Poll interval (seconds)
     poll_interval_seconds: int = 300  # 5 minutes
 
-    # Ayntec order status URL template — replace {order_id} with the order number
-    ayntec_order_url: str = "https://www.ayntec.com/orders/{order_id}"
+    # Ayntec shipping dashboard URL — scraped for shipped order-number ranges
+    ayntec_dashboard_url: str = "https://www.ayntec.com/pages/shipment-dashboard"
 
     # GitHub repository URL (shown on landing page)
     github_repo_url: str = "https://github.com/Biohive/ayntec-shipping-notification"

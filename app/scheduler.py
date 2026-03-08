@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Order, NotificationSetting
-from app.checker import fetch_order_status
+from app.checker import fetch_shipped_ranges, check_order_shipped
 from app.notifiers import send_discord, send_email, send_ntfy
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ scheduler = AsyncIOScheduler()
 
 
 async def check_all_orders() -> None:
-    """Poll Ayntec for every active, non-notified order and send notifications."""
+    """Poll the Ayntec dashboard and check every active, non-notified order."""
     db: Session = SessionLocal()
     try:
         orders = (
@@ -33,15 +33,21 @@ async def check_all_orders() -> None:
 
         logger.info("Checking %d active order(s)…", len(orders))
 
+        # Fetch the shipping dashboard once for all orders
+        shipped_ranges = await fetch_shipped_ranges()
+        if not shipped_ranges:
+            logger.warning("No shipped ranges found on dashboard – skipping this cycle")
+            return
+
         for order in orders:
-            await _check_order(db, order)
+            await _check_order(db, order, shipped_ranges)
 
     finally:
         db.close()
 
 
-async def _check_order(db: Session, order: Order) -> None:
-    status_text, is_shipped = await fetch_order_status(order.order_number)
+async def _check_order(db: Session, order: Order, shipped_ranges: list) -> None:
+    status_text, is_shipped = check_order_shipped(order.order_number, shipped_ranges)
 
     order.last_status = status_text
 
