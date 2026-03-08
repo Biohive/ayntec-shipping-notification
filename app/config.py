@@ -1,8 +1,15 @@
 """Application configuration loaded from environment variables."""
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+import logging
 import secrets
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+# Sentinel so we can detect whether SECRET_KEY was set by the operator
+_GENERATED_SENTINEL = "__generated__"
 
 
 class Settings(BaseSettings):
@@ -16,7 +23,7 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Ayntec Shipping Notifier"
     app_url: str = "http://localhost:8000"
-    secret_key: str = secrets.token_hex(32)
+    secret_key: str = _GENERATED_SENTINEL
     debug: bool = False
 
     # Database
@@ -37,11 +44,24 @@ class Settings(BaseSettings):
     # GitHub repository URL (shown on landing page)
     github_repo_url: str = "https://github.com/Biohive/ayntec-shipping-notification"
 
+    # SMTP (leave smtp_host blank to disable email notifications)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_pass: str = ""
+    smtp_from: str = ""
+
     @field_validator("secret_key")
     @classmethod
     def secret_key_must_not_be_empty(cls, v: str) -> str:
-        if not v:
-            return secrets.token_hex(32)
+        if not v or v == _GENERATED_SENTINEL:
+            generated = secrets.token_hex(32)
+            logger.warning(
+                "SECRET_KEY is not set — a random key was generated. "
+                "All sessions will be invalidated on restart. "
+                "Set SECRET_KEY in your .env file to persist sessions."
+            )
+            return generated
         return v
 
 

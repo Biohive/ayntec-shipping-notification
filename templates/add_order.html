@@ -24,6 +24,7 @@
     {% endif %}
 
     <form action="/orders/add" method="post" class="space-y-5">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
       <div>
         <label for="order_number" class="block text-sm font-medium text-gray-700 mb-1.5">
           Order Number <span class="text-red-500">*</span>
