@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard – {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">My Orders</h1>
+      <p class="text-sm text-gray-500 mt-1">
+        Tracking {{ orders | length }} order{{ 's' if orders | length != 1 else '' }}.
+        Checked every 5&nbsp;minutes.
+      </p>
+    </div>
+    <a href="/orders/add"
+       class="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2.5 rounded-xl shadow-sm text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+      </svg>
+      Add Order
+    </a>
+  </div>
+
+  <!-- Empty state -->
+  {% if not orders %}
+  <div class="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+    <svg class="w-14 h-14 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/>
+    </svg>
+    <h2 class="text-lg font-semibold text-gray-700 mb-1">No orders tracked yet</h2>
+    <p class="text-gray-400 text-sm mb-6">Add your first Ayntec order number to start receiving notifications.</p>
+    <a href="/orders/add"
+       class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold px-6 py-2.5 rounded-xl text-sm">
+      Add your first order →
+    </a>
+  </div>
+  {% else %}
+
+  <!-- Orders list -->
+  <div class="space-y-4">
+    {% for order in orders %}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <!-- Order Info -->
+      <div class="flex items-start gap-4">
+        <!-- Status icon -->
+        <div class="mt-0.5">
+          {% if order.shipped %}
+            <span class="flex w-10 h-10 items-center justify-center rounded-full bg-green-100">
+              <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+          {% elif not order.active %}
+            <span class="flex w-10 h-10 items-center justify-center rounded-full bg-gray-100">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </span>
+          {% else %}
+            <span class="flex w-10 h-10 items-center justify-center rounded-full bg-blue-100">
+              <svg class="w-5 h-5 text-blue-500 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                <circle cx="10" cy="10" r="6"/>
+              </svg>
+            </span>
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-mono font-bold text-gray-900 text-sm">#{{ order.order_number }}</span>
+            {% if order.label %}
+              <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{{ order.label }}</span>
+            {% endif %}
+            {% if order.shipped %}
+              <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Shipped ✓</span>
+            {% elif not order.active %}
+              <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
+            {% else %}
+              <span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Tracking…</span>
+            {% endif %}
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            Added {{ order.created_at.strftime('%b %d, %Y') }}
+            {% if order.last_status %}
+              &bull; Status: <span class="text-gray-600">{{ order.last_status }}</span>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-2 flex-shrink-0">
+        {% if order.shipped %}
+          <form action="/orders/{{ order.id }}/reactivate" method="post">
+            <button type="submit"
+                    class="text-xs text-brand-600 hover:text-brand-800 border border-brand-200 hover:border-brand-400 px-3 py-1.5 rounded-lg">
+              Re-track
+            </button>
+          </form>
+        {% endif %}
+        <form action="/orders/{{ order.id }}/delete" method="post"
+              onsubmit="return confirm('Remove order #{{ order.order_number }}?')">
+          <button type="submit"
+                  class="text-xs text-red-500 hover:text-red-700 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg">
+            Remove
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Quick settings reminder -->
+  <div class="mt-8 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+    <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <p class="text-sm text-amber-800">
+      Make sure you've configured at least one
+      <a href="/settings" class="font-semibold underline hover:text-amber-900">notification channel</a>
+      so we can alert you when your order ships.
+    </p>
+  </div>
+
+</div>
+{% endblock %}
