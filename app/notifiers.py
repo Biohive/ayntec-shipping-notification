@@ -7,8 +7,6 @@ from email.mime.text import MIMEText
 
 import httpx
 
-from app.config import settings
-
 logger = logging.getLogger(__name__)
 
 
