@@ -115,9 +115,13 @@ def _parse_dashboard(html: str) -> list[ShippedRange]:
 
 
 def check_order_shipped(
-    order_number: str, ranges: list[ShippedRange]
+    order_number: str, ranges: list[ShippedRange], device_type: str | None = None
 ) -> tuple[str, bool]:
-    """Check whether *order_number* falls within any shipped range.
+    """Check whether *order_number* falls within any shipped range for *device_type*.
+
+    *device_type* is required (e.g. ``"AYN Thor Black Pro"``).  If it is not
+    set the order is treated as not yet shipped so that overlapping ranges
+    across product tiers cannot trigger false positive notifications.
 
     If the supplied order number has fewer digits than the range boundaries,
     it is expanded by appending zeros to match the range's digit count before
@@ -134,7 +138,13 @@ def check_order_shipped(
 
     order_digits = len(str(order_int))
 
-    for r in ranges:
+    if not device_type:
+        return "Not yet shipped", False
+
+    needle = device_type.strip().lower()
+    candidate_ranges = [r for r in ranges if r.product.strip().lower() == needle]
+
+    for r in candidate_ranges:
         range_digits = len(str(r.range_low))
         candidate = order_int
         if order_digits < range_digits:

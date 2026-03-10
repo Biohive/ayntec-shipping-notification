@@ -70,6 +70,11 @@
         <div>
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-mono font-bold text-gray-900 text-sm">#{{ order.order_number }}</span>
+            {% if order.device_type %}
+              <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">{{ order.device_type }}</span>
+            {% else %}
+              <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-medium">⚠ No device type set</span>
+            {% endif %}
             {% if order.label %}
               <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{{ order.label }}</span>
             {% endif %}

@@ -54,12 +54,13 @@ async def check_all_orders() -> None:
         for order in orders:
             await _check_order(db, order, shipped_ranges)
 
+
     finally:
         db.close()
 
 
 async def _check_order(db: Session, order: Order, shipped_ranges: list) -> None:
-    status_text, is_shipped = check_order_shipped(order.order_number, shipped_ranges)
+    status_text, is_shipped = check_order_shipped(order.order_number, shipped_ranges, order.device_type)
 
     order.last_status = status_text
 

@@ -34,6 +34,7 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     order_number = Column(String, nullable=False)
     label = Column(String, nullable=True)  # optional friendly label
+    device_type = Column(String, nullable=True)  # full product name, e.g. "AYN Thor Black Pro"
     last_status = Column(String, nullable=True)
     shipped = Column(Boolean, default=False)
     notified = Column(Boolean, default=False)  # prevent duplicate notifications

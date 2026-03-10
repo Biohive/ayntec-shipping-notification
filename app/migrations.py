@@ -110,11 +110,21 @@ def _m003_add_summary_timezone_and_fix_defaults(conn: Connection) -> None:
         ))
 
 
+def _m004_add_device_type_to_orders(conn: Connection) -> None:
+    """Add device_type column to orders for product-specific range matching."""
+    from sqlalchemy import inspect
+    insp = inspect(conn)
+    existing = {c["name"] for c in insp.get_columns("orders")}
+    if "device_type" not in existing:
+        conn.execute(text("ALTER TABLE orders ADD COLUMN device_type TEXT"))
+
+
 # Ordered list of migrations.  Index 0 → version 1, index 1 → version 2, etc.
 MIGRATIONS: list = [
     _m001_add_notification_tested_columns,
     _m002_add_check_logs_and_summary_configs,
     _m003_add_summary_timezone_and_fix_defaults,
+    _m004_add_device_type_to_orders,
 ]
 
 
