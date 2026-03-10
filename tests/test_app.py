@@ -157,6 +157,38 @@ def test_check_order_shipped_no_match():
     assert shipped is False
 
 
+def test_check_order_shipped_short_number_expanded_to_match():
+    """A short order number is padded with zeros to match the range digit count."""
+    from app.checker import check_order_shipped, ShippedRange
+
+    # Dashboard range: 1584xx--1647xx → 158400–164799
+    ranges = [ShippedRange(date="2026/3/4", product="AYN Thor Black Pro", range_low=158400, range_high=164799)]
+    # User enters "1600" → expanded to 160000 → within range
+    status, shipped = check_order_shipped("1600", ranges)
+    assert shipped is True
+    assert "Shipped" in status
+
+
+def test_check_order_shipped_short_number_expanded_no_match():
+    """A short order number that, once expanded, still falls outside the range."""
+    from app.checker import check_order_shipped, ShippedRange
+
+    ranges = [ShippedRange(date="2026/3/4", product="AYN Thor Black Pro", range_low=158400, range_high=164799)]
+    # User enters "1648" → expanded to 164800 → just outside range (164799 max)
+    status, shipped = check_order_shipped("1648", ranges)
+    assert shipped is False
+
+
+def test_check_order_shipped_short_number_at_range_boundary():
+    """A short order number that expands exactly to the range lower bound."""
+    from app.checker import check_order_shipped, ShippedRange
+
+    ranges = [ShippedRange(date="2026/3/4", product="AYN Thor Black Pro", range_low=158400, range_high=164799)]
+    # "1584" → 158400 → exactly at range_low
+    status, shipped = check_order_shipped("1584", ranges)
+    assert shipped is True
+
+
 # ─── Notifiers (unit, no network) ────────────────────────────────────────────
 
 @pytest.mark.asyncio

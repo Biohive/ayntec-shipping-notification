@@ -119,6 +119,11 @@ def check_order_shipped(
 ) -> tuple[str, bool]:
     """Check whether *order_number* falls within any shipped range.
 
+    If the supplied order number has fewer digits than the range boundaries,
+    it is expanded by appending zeros to match the range's digit count before
+    comparison.  For example, entering "1600" is treated as "160000" when
+    checked against a 6-digit range like ``1584xx--1647xx``.
+
     Returns ``(status_text, is_shipped)``.
     """
     cleaned = order_number.strip().lstrip("#")
@@ -127,8 +132,14 @@ def check_order_shipped(
     except ValueError:
         return "invalid order number", False
 
+    order_digits = len(str(order_int))
+
     for r in ranges:
-        if r.range_low <= order_int <= r.range_high:
+        range_digits = len(str(r.range_low))
+        candidate = order_int
+        if order_digits < range_digits:
+            candidate = order_int * (10 ** (range_digits - order_digits))
+        if r.range_low <= candidate <= r.range_high:
             return f"Shipped ({r.product}, {r.date})", True
 
     return "Not yet shipped", False
