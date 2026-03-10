@@ -107,3 +107,20 @@ class SummaryConfig(Base):
     last_sent_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="summary_config")
+
+
+class ShipmentSnapshot(Base):
+    """Latest scraped shipment ranges from the Ayntec dashboard.
+
+    Rebuilt on every successful poll so the public checker tool always
+    reflects the most recent data without requiring a user login.
+    """
+
+    __tablename__ = "shipment_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product = Column(String, nullable=False)   # e.g. "AYN Thor Black Pro"
+    date = Column(String, nullable=False)       # e.g. "2026/3/4"
+    range_low = Column(Integer, nullable=False)
+    range_high = Column(Integer, nullable=False)
+    fetched_at = Column(DateTime, nullable=False)

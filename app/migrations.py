@@ -119,12 +119,30 @@ def _m004_add_device_type_to_orders(conn: Connection) -> None:
         conn.execute(text("ALTER TABLE orders ADD COLUMN device_type TEXT"))
 
 
+def _m005_add_shipment_snapshots(conn: Connection) -> None:
+    """Add shipment_snapshots table for the public order-checker tool."""
+    from sqlalchemy import inspect
+    insp = inspect(conn)
+    if "shipment_snapshots" not in insp.get_table_names():
+        conn.execute(text(
+            "CREATE TABLE shipment_snapshots ("
+            "  id INTEGER PRIMARY KEY,"
+            "  product TEXT NOT NULL,"
+            "  date TEXT NOT NULL,"
+            "  range_low INTEGER NOT NULL,"
+            "  range_high INTEGER NOT NULL,"
+            "  fetched_at DATETIME NOT NULL"
+            ")"
+        ))
+
+
 # Ordered list of migrations.  Index 0 → version 1, index 1 → version 2, etc.
 MIGRATIONS: list = [
     _m001_add_notification_tested_columns,
     _m002_add_check_logs_and_summary_configs,
     _m003_add_summary_timezone_and_fix_defaults,
     _m004_add_device_type_to_orders,
+    _m005_add_shipment_snapshots,
 ]
 
 

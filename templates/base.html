@@ -44,6 +44,7 @@
 
         <!-- Right side -->
         <div class="flex items-center gap-3">
+          <a href="/check" class="text-sm font-medium text-gray-600 hover:text-gray-900">Check Order</a>
           {% if user %}
             <a href="/dashboard" class="text-sm font-medium text-brand-600 hover:text-brand-800">Dashboard</a>
             <a href="/settings" class="text-sm font-medium text-gray-600 hover:text-gray-900">Settings</a>
@@ -69,10 +70,6 @@
           {% else %}
             <a href="/auth/login"
                class="text-sm font-medium text-brand-600 hover:text-brand-800">Sign in</a>
-            <a href="/auth/login"
-               class="text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg shadow-sm">
-              Get Started
-            </a>
           {% endif %}
         </div>
       </div>

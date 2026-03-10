@@ -7,11 +7,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Order, NotificationSetting, CheckLog, SummaryConfig
+from app.models import Order, NotificationSetting, CheckLog, SummaryConfig, ShipmentSnapshot
 from app.checker import fetch_shipped_ranges, check_order_shipped
 from app.notifiers import send_discord, send_email, send_ntfy
 from app.notifiers import send_discord_summary, send_email_summary, send_ntfy_summary
@@ -22,16 +23,35 @@ scheduler = AsyncIOScheduler()
 
 
 async def check_all_orders() -> None:
-    """Poll the Ayntec dashboard and check every active, non-notified order."""
+    """Poll the Ayntec dashboard, persist the snapshot, then check every active unnotified order."""
     db: Session = SessionLocal()
     try:
+        # Always fetch the latest shipment data so the public checker stays current.
+        shipped_ranges = await fetch_shipped_ranges()
+        if shipped_ranges:
+            now = datetime.datetime.utcnow()
+            # Replace all existing snapshots atomically.
+            db.execute(text("DELETE FROM shipment_snapshots"))
+            for r in shipped_ranges:
+                db.add(ShipmentSnapshot(
+                    product=r.product,
+                    date=r.date,
+                    range_low=r.range_low,
+                    range_high=r.range_high,
+                    fetched_at=now,
+                ))
+            db.commit()
+            logger.info("Stored %d shipment snapshot(s)", len(shipped_ranges))
+        else:
+            logger.warning("No shipped ranges found on dashboard – snapshot not updated")
+
         orders = (
             db.query(Order)
             .filter(Order.active == True, Order.notified == False)  # noqa: E712
             .all()
         )
 
-        if not orders:
+        if not orders or not shipped_ranges:
             return
 
         logger.info("Checking %d active order(s)…", len(orders))
@@ -45,15 +65,8 @@ async def check_all_orders() -> None:
                 db.add(CheckLog(user_id=order.user_id, checked_at=now))
         db.commit()
 
-        # Fetch the shipping dashboard once for all orders
-        shipped_ranges = await fetch_shipped_ranges()
-        if not shipped_ranges:
-            logger.warning("No shipped ranges found on dashboard – skipping this cycle")
-            return
-
         for order in orders:
             await _check_order(db, order, shipped_ranges)
-
 
     finally:
         db.close()

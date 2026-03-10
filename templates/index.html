@@ -7,21 +7,21 @@
 <!-- Hero Section -->
 <section class="bg-gradient-to-br from-brand-700 to-brand-900 text-white">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
-    <div class="inline-flex items-center gap-2 bg-white/10 text-white/90 rounded-full px-4 py-1.5 text-sm font-medium mb-6">
+    <!-- <div class="inline-flex items-center gap-2 bg-white/10 text-white/90 rounded-full px-4 py-1.5 text-sm font-medium mb-6">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
       </svg>
       Never miss a shipment again
-    </div>
+    </div> -->
 
     <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight mb-6">
       Track your Ayntec orders<br/>
-      <span class="text-brand-200">automatically.</span>
+      <!-- <span class="text-brand-200">automatically.</span> -->
     </h1>
 
     <p class="text-lg sm:text-xl text-white/80 max-w-2xl mx-auto mb-10">
       Enter your Ayntec order number and we'll check for you every 5&nbsp;minutes.
-      The moment your order ships, you'll get notified via Discord, email, or NTFY — instantly.
+      The moment your order ships, you'll get notified via Discord, email, or NTFY.
     </p>
 
     <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -29,7 +29,7 @@
          class="w-full sm:w-auto bg-white text-brand-700 font-semibold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl hover:bg-brand-50 text-lg">
         Get Started →
       </a>
-      <a href="{{ github_repo_url }}" target="_blank" rel="noopener noreferrer"
+      <!-- <a href="{{ github_repo_url }}" target="_blank" rel="noopener noreferrer"
          class="w-full sm:w-auto border border-white/40 text-white font-medium px-8 py-3.5 rounded-xl hover:bg-white/10 text-lg flex items-center justify-center gap-2">
         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483
@@ -43,8 +43,25 @@
                    C22 6.484 17.522 2 12 2z"/>
         </svg>
         View on GitHub
-      </a>
+      </a> -->
     </div>
+  </div>
+</section>
+
+<!-- Quick Checker CTA -->
+<section class="py-10 bg-white border-b border-gray-100">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+    <h2 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">Need to quickly check an order?</h2>
+    <p class="text-gray-500 mb-6 max-w-xl mx-auto">
+      Instantly check your AYN Thor shipping status - no sign-in required.
+    </p>
+    <a href="/check"
+       class="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-7 py-3 rounded-xl shadow-sm text-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      Check Order Status →
+    </a>
   </div>
 </section>
 
@@ -135,18 +152,6 @@
       </div>
 
     </div>
-  </div>
-</section>
-
-<!-- CTA Banner -->
-<section class="py-16 bg-brand-700 text-white text-center">
-  <div class="max-w-2xl mx-auto px-4">
-    <h2 class="text-3xl font-bold mb-4">Ready to stop refreshing the page?</h2>
-    <p class="text-white/80 mb-8">Sign in once, add your order, and let us handle the rest.</p>
-    <a href="/auth/login"
-       class="inline-block bg-white text-brand-700 font-semibold px-8 py-3 rounded-xl shadow hover:shadow-lg hover:bg-brand-50 text-lg">
-      Get Started for Free →
-    </a>
   </div>
 </section>
 

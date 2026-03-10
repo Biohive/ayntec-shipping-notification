@@ -1,17 +1,18 @@
 """Page routes: landing, dashboard, settings."""
 
 import logging
+import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Request, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.config import settings
 from app.csrf import verify_csrf
 from app.database import get_db
-from app.models import Order, NotificationSetting, SummaryConfig
+from app.models import Order, NotificationSetting, SummaryConfig, ShipmentSnapshot
 from app.notifiers import send_discord, send_ntfy, send_email
 from app.security import validate_webhook_url
 from app.templates import templates
@@ -32,6 +33,137 @@ async def landing(request: Request):
             "github_repo_url": settings.github_repo_url,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Public order checker (no login required)
+# ---------------------------------------------------------------------------
+
+# Import here to avoid circular imports — orders router owns this list.
+_ORDER_NUMBER_RE = re.compile(r"^\d{1,10}$")
+
+# Must stay in sync with KNOWN_DEVICE_TYPES in routers/orders.py
+_CHECKER_DEVICE_TYPES: list[str] = [
+    "AYN Thor Black Lite",
+    "AYN Thor Black Base",
+    "AYN Thor Black Pro",
+    "AYN Thor Black Max",
+    "AYN Thor White Pro",
+    "AYN Thor White Max",
+    "AYN Thor Rainbow Pro",
+    "AYN Thor Rainbow Max",
+    "AYN Thor Clear Purple Pro",
+    "AYN Thor Clear Purple Max",
+]
+_CHECKER_DEVICE_TYPES_LOWER = {d.lower() for d in _CHECKER_DEVICE_TYPES}
+
+
+def _format_range(low: int, high: int) -> str:
+    """Format a stored integer range back into prefix+xx notation.
+
+    E.g. (150000, 163399) → '1500xx–1633xx'
+    """
+    wc = 0
+    for exp in range(1, 8):
+        divisor = 10 ** exp
+        if low % divisor == 0 and (high + 1) % divisor == 0:
+            wc = exp
+        else:
+            break
+    if wc == 0:
+        return f"{low}\u2013{high}"
+    divisor = 10 ** wc
+    xs = "x" * wc
+    return f"{low // divisor}{xs}\u2013{high // divisor}{xs}"
+
+
+@router.get("/check")
+async def order_checker_page(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request)
+    latest = (
+        db.query(ShipmentSnapshot)
+        .order_by(ShipmentSnapshot.fetched_at.desc())
+        .first()
+    )
+    return templates.TemplateResponse(
+        request,
+        "check.html",
+        {
+            "user": user,
+            "device_types": _CHECKER_DEVICE_TYPES,
+            "last_updated": latest.fetched_at if latest else None,
+            "poll_minutes": settings.poll_interval_seconds // 60,
+        },
+    )
+
+
+@router.get("/api/check")
+async def api_check_order(
+    request: Request,
+    product: str = "",
+    order: str = "",
+    db: Session = Depends(get_db),
+):
+    """Public JSON endpoint: check whether an order number has shipped.
+
+    Returns ``{"shipped": bool, "date": str|null, "last_fetched": str|null}``.
+    """
+    product = product.strip()
+    order = order.strip().lstrip("#")
+
+    if not product or product.lower() not in _CHECKER_DEVICE_TYPES_LOWER:
+        return JSONResponse({"error": "Invalid product"}, status_code=400)
+
+    if not order or not _ORDER_NUMBER_RE.match(order):
+        return JSONResponse({"error": "Order number must be 1–10 digits"}, status_code=400)
+
+    snapshots = (
+        db.query(ShipmentSnapshot)
+        .filter(ShipmentSnapshot.product == product)
+        .all()
+    )
+
+    if not snapshots:
+        latest = db.query(ShipmentSnapshot).order_by(ShipmentSnapshot.fetched_at.desc()).first()
+        return JSONResponse({
+            "shipped": False,
+            "date": None,
+            "last_fetched": latest.fetched_at.strftime("%Y/%m/%d %H:%M UTC") if latest else None,
+            "latest_range": None,
+        })
+
+    try:
+        order_int = int(order)
+    except ValueError:
+        return JSONResponse({"error": "Invalid order number"}, status_code=400)
+
+    order_digits = len(str(order_int))
+    matched_date: str | None = None
+
+    for snap in snapshots:
+        range_digits = len(str(snap.range_low))
+        candidate = order_int
+        if order_digits < range_digits:
+            factor = 10 ** (range_digits - order_digits)
+            candidate = order_int * factor
+
+        if snap.range_low <= candidate <= snap.range_high:
+            matched_date = snap.date
+            break
+
+    last_fetched = snapshots[0].fetched_at.strftime("%Y/%m/%d %H:%M UTC") if snapshots else None
+
+    # Find the most recent snapshot to show as context when not yet shipped
+    latest_snap = max(snapshots, key=lambda s: s.range_high)
+    latest_range_str = _format_range(latest_snap.range_low, latest_snap.range_high)
+
+    return JSONResponse({
+        "shipped": matched_date is not None,
+        "date": matched_date,
+        "last_fetched": last_fetched,
+        "latest_range": latest_range_str,
+        "latest_range_date": latest_snap.date,
+    })
 
 
 @router.get("/dashboard")
