@@ -110,11 +110,10 @@
            class="text-xs text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg">
           Edit
         </a>
-        <form action="/orders/{{ order.id }}/delete" method="post"
-              onsubmit="return confirm('Remove order #{{ order.order_number }}?')">
+        <form action="/orders/{{ order.id }}/delete" method="post" class="remove-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-          <button type="submit"
-                  class="text-xs text-red-500 hover:text-red-700 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg">
+          <button type="button"
+                  class="remove-btn text-xs text-red-500 hover:text-red-700 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg">
             Remove
           </button>
         </form>
@@ -139,4 +138,33 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.remove-form').forEach(function(form) {
+    var btn = form.querySelector('.remove-btn');
+    var timer = null;
+    var armed = false;
+
+    btn.addEventListener('click', function() {
+      if (!armed) {
+        // First click — arm the button
+        armed = true;
+        btn.textContent = 'Are you sure?';
+        btn.className = 'remove-btn text-xs text-white bg-red-500 hover:bg-red-600 border border-red-500 px-3 py-1.5 rounded-lg font-semibold';
+        timer = setTimeout(function() {
+          // Auto-reset after 3 seconds of inaction
+          armed = false;
+          btn.textContent = 'Remove';
+          btn.className = 'remove-btn text-xs text-red-500 hover:text-red-700 border border-red-100 hover:border-red-300 px-3 py-1.5 rounded-lg';
+        }, 3000);
+      } else {
+        // Second click — confirmed, submit
+        clearTimeout(timer);
+        form.submit();
+      }
+    });
+  });
+</script>
 {% endblock %}
