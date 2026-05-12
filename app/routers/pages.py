@@ -265,6 +265,16 @@ async def save_settings(
     notif.discord_enabled = discord_enabled and bool(new_discord_url)
 
     new_email = email_address.strip() or None
+    if new_email:
+        try:
+            from app.notifiers import _sanitize_email
+            new_email = _sanitize_email(new_email)
+        except ValueError as exc:
+            return templates.TemplateResponse(
+                request,
+                "settings.html",
+                {"user": user, "notif": notif, "smtp_configured": bool(settings.smtp_host), "error": str(exc)},
+            )
     if new_email != notif.email_address:
         notif.email_tested = False
     notif.email_address = new_email
@@ -383,6 +393,11 @@ async def test_email(
     if not addr:
         return _empty_field_response(request, user, notif, "email_address",
                                      "Enter an email address first.")
+    from app.notifiers import _sanitize_email
+    try:
+        addr = _sanitize_email(addr)
+    except ValueError as exc:
+        return _empty_field_response(request, user, notif, "email_address", str(exc))
     try:
         send_email(addr, "TEST", "This is a test notification")
         if notif:

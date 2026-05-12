@@ -1,6 +1,7 @@
 """Notification dispatchers: Discord, Email (SMTP), NTFY."""
 
 import logging
+import re
 import smtplib
 from email.mime.text import MIMEText
 
@@ -10,6 +11,23 @@ from app.config import settings
 from app.security import validate_webhook_url
 
 logger = logging.getLogger(__name__)
+
+# RFC-5321 / RFC-5322 compliant enough for a basic server-side guard.
+# The real gate is the SMTP server itself; this prevents CR/LF injection.
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
+
+def _sanitize_email(address: str) -> str:
+    """Strip header-injection characters and validate basic email format.
+
+    Raises ``ValueError`` if the address is malformed.
+    """
+    # Remove any CR, LF, or NUL that could break SMTP headers
+    cleaned = address.strip().replace("\r", "").replace("\n", "").replace("\0", "")
+    if not _EMAIL_RE.match(cleaned):
+        raise ValueError(f"Invalid email address: {address!r}")
+    return cleaned
+
 
 
 def _build_summary_body(shipped_orders: list, pending_orders: list, check_count: int) -> tuple[str, bool]:
@@ -129,6 +147,8 @@ def send_email(to_address: str, order_number: str, status: str) -> None:
         logger.warning("SMTP not configured – skipping email notification")
         return
 
+    to_address = _sanitize_email(to_address)
+
     subject = f"Ayntec Order #{order_number} Has Shipped!"
     body = (
         f"Good news! Your Ayntec order #{order_number} has shipped.\n\n"
@@ -161,6 +181,8 @@ def send_email_summary(
     if not smtp_host:
         logger.warning("SMTP not configured – skipping summary email")
         return
+
+    to_address = _sanitize_email(to_address)
 
     body, all_shipped = _build_summary_body(shipped_orders, pending_orders, check_count)
     subject = (

@@ -2,6 +2,7 @@
 
 import ipaddress
 import logging
+import socket
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -43,14 +44,41 @@ _LOCALHOST_NAMES = frozenset({
 
 
 def _is_private_ip(host: str) -> bool:
-    """Return True if *host* (IP literal or hostname) is a private/reserved address."""
+    """Return True if *host* (IP literal or hostname) resolves to a private/reserved address.
+
+    For IP literals the check is purely local.  For hostnames the address is
+    resolved via DNS so that a DNS-rebinding attack (TOCTOU) cannot be used
+    to point the validated URL at an internal address after validation passes.
+    If DNS resolution fails the host is treated as blocked (fail-closed).
+    """
     try:
         addr = ipaddress.ip_address(host)
         networks = _PRIVATE_IPV4 if addr.version == 4 else _PRIVATE_IPV6
         return any(addr in net for net in networks)
     except ValueError:
         # Not an IP literal — treat as a hostname
-        return host.lower() in _LOCALHOST_NAMES
+        if host.lower() in _LOCALHOST_NAMES:
+            return True
+        # Resolve all A/AAAA records and block if any is private/reserved.
+        try:
+            results = socket.getaddrinfo(host, None)
+        except OSError:
+            # DNS resolution failure — fail closed (block the URL)
+            logger.warning("DNS resolution failed for host %r – blocking URL", host)
+            return True
+        for (_family, _type, _proto, _canonname, sockaddr) in results:
+            ip_str = sockaddr[0]
+            try:
+                resolved = ipaddress.ip_address(ip_str)
+                networks = _PRIVATE_IPV4 if resolved.version == 4 else _PRIVATE_IPV6
+                if any(resolved in net for net in networks):
+                    logger.warning(
+                        "Host %r resolved to private IP %s – blocking URL", host, ip_str
+                    )
+                    return True
+            except ValueError:
+                continue
+        return False
 
 
 def validate_webhook_url(url: str, *, label: str = "URL") -> str:

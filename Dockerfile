@@ -11,8 +11,13 @@ COPY app/ ./app/
 COPY templates/ ./templates/
 COPY static/ ./static/
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+# Create data directory for SQLite and hand it to the non-root user
+RUN mkdir -p /app/data \
+    && addgroup --system appgroup \
+    && adduser --system --ingroup appgroup --no-create-home appuser \
+    && chown -R appuser:appgroup /app/data
+
+USER appuser
 
 EXPOSE 8000
 
